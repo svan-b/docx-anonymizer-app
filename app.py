@@ -122,16 +122,17 @@ st.markdown("""
         font-weight: 400;
         letter-spacing: 0.01em;
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.4) !important;
         padding: 0.75rem 2rem;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        background: rgba(255, 255, 255, 0.05);
+        background: rgba(255, 255, 255, 0.12) !important;
+        color: #FFFFFF !important;
     }
 
     .stButton>button:hover {
-        border-color: rgba(255, 255, 255, 0.4);
-        box-shadow: 0 8px 24px rgba(255, 255, 255, 0.1);
-        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 8px 24px rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.2) !important;
         transform: translateY(-2px);
     }
 
