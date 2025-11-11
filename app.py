@@ -72,10 +72,32 @@ st.markdown("""
 
     /* Upload boxes */
     [data-testid="stFileUploader"] {
-        border: 1px solid #2A2F4A;
-        border-radius: 4px;
-        padding: 1rem;
-        background-color: #1A1F3A;
+        border: 2px solid #FF8C00;
+        border-radius: 6px;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(26, 31, 58, 0.95) 100%);
+        box-shadow: 0 0 15px rgba(255, 140, 0, 0.15);
+        transition: all 0.3s ease;
+    }
+
+    [data-testid="stFileUploader"]:hover {
+        border-color: #FFA500;
+        box-shadow: 0 0 20px rgba(255, 140, 0, 0.25);
+        background: linear-gradient(135deg, rgba(255, 140, 0, 0.12) 0%, rgba(26, 31, 58, 0.95) 100%);
+    }
+
+    /* Upload button styling */
+    [data-testid="stFileUploader"] section button {
+        background-color: rgba(255, 140, 0, 0.15) !important;
+        border: 1px solid #FF8C00 !important;
+        color: #FF8C00 !important;
+        font-family: 'monospace' !important;
+        font-weight: 500 !important;
+    }
+
+    [data-testid="stFileUploader"] section button:hover {
+        background-color: rgba(255, 140, 0, 0.25) !important;
+        border-color: #FFA500 !important;
     }
 
     /* Buttons */
@@ -125,8 +147,23 @@ st.markdown("""
 
     /* Sidebar */
     [data-testid="stSidebar"] {
-        background-color: #0F1229;
-        border-right: 1px solid #2A2F4A;
+        background: linear-gradient(180deg, rgba(15, 18, 41, 0.95) 0%, rgba(255, 140, 0, 0.08) 100%);
+        border-right: 2px solid rgba(255, 140, 0, 0.3);
+        backdrop-filter: blur(10px);
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        color: #E8E8E8;
+    }
+
+    /* Section containers */
+    .section-container {
+        background: linear-gradient(135deg, rgba(26, 31, 58, 0.6) 0%, rgba(15, 18, 41, 0.8) 100%);
+        border: 1px solid #2A2F4A;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     /* Status indicator */
@@ -194,6 +231,7 @@ with st.sidebar:
     """)
 
 # Main interface
+st.markdown('<div class="section-container">', unsafe_allow_html=True)
 st.markdown("### INPUT CONFIGURATION")
 
 col1, col2 = st.columns([3, 2])
@@ -222,10 +260,12 @@ with col2:
     if excel_file:
         st.session_state.excel_loaded = True
         st.success("✓ Mappings ready")
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
 # Processing options
+st.markdown('<div class="section-container">', unsafe_allow_html=True)
 st.markdown("### PROCESSING OPTIONS")
 col1, col2 = st.columns(2)
 
@@ -244,10 +284,12 @@ with col2:
         key="clear_headers_footers",
         help="Removes logo and text from headers/footers"
     )
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
 # Execute button
+st.markdown('<div class="section-container">', unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     execute_btn = st.button(
@@ -256,6 +298,7 @@ with col2:
         disabled=(not docx_files or not excel_file),
         use_container_width=True
     )
+st.markdown('</div>', unsafe_allow_html=True)
 
 if execute_btn:
     # Reset state
@@ -335,6 +378,7 @@ if execute_btn:
                 st.stop()
 
         st.divider()
+        st.markdown('<div class="section-container">', unsafe_allow_html=True)
         st.markdown("### PROCESSING PIPELINE")
 
         total_replacements = 0
@@ -446,6 +490,7 @@ if execute_btn:
             '<div class="status-box">✓ PIPELINE COMPLETE</div>',
             unsafe_allow_html=True
         )
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Save results to session state
         st.session_state.results = results
@@ -478,6 +523,7 @@ if execute_btn:
 # Results display
 if st.session_state.processing_complete:
     st.divider()
+    st.markdown('<div class="section-container">', unsafe_allow_html=True)
     st.markdown("### PROCESSING SUMMARY")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -497,8 +543,10 @@ if st.session_state.processing_complete:
         use_container_width=True,
         hide_index=True
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
+    st.markdown('<div class="section-container">', unsafe_allow_html=True)
     st.markdown("### DOWNLOAD ARCHIVES")
 
     col1, col2, col3 = st.columns([2, 2, 1])
@@ -530,3 +578,4 @@ if st.session_state.processing_complete:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
