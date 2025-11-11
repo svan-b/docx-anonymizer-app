@@ -1,0 +1,26 @@
+name: Health Check
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if app is accessible
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
+          if [ $response -eq 200 ]; then
+            echo "✓ App is healthy (HTTP $response)"
+          else
+            echo "⚠ App returned HTTP $response"
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "App health check failed - please investigate"

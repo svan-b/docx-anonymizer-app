@@ -1,6 +1,8 @@
 # DOCX Anonymizer + PDF Converter
 
-A web application built with Streamlit that anonymizes Word documents (.docx/.doc) based on custom mappings and converts them to PDF.
+A professional web application built with Streamlit for anonymizing Word documents (.docx/.doc) with custom mappings and PDF conversion.
+
+🌐 **Live Application**: [https://docx-anonymizer-app.streamlit.app](https://docx-anonymizer-app.streamlit.app)
 
 ## Features
 
@@ -10,6 +12,7 @@ A web application built with Streamlit that anonymizes Word documents (.docx/.do
 - **Header/Footer Clearing**: Clear headers and footers (useful for presentations with logos)
 - **PDF Conversion**: Automatic conversion to PDF using LibreOffice
 - **ZIP Download**: Download all processed files as ZIP archives
+- **xAI Branded UI**: Clean, modern interface with soft aesthetic
 
 ## How to Use
 
@@ -20,7 +23,7 @@ A web application built with Streamlit that anonymizes Word documents (.docx/.do
 3. **Configure Options**:
    - Remove all images (checked by default)
    - Clear headers/footers (for presentations with logos)
-4. **Process**: Click "Process Files" to anonymize and convert
+4. **Process**: Click "Execute Anonymization" to process files
 5. **Download**: Get your anonymized DOCX and PDF files as ZIP archives
 
 ## Excel Format
@@ -61,8 +64,39 @@ streamlit run app.py
 
 ## Deployment
 
-This app is deployed on Streamlit Cloud with LibreOffice support via `packages.txt`.
+### Live Production Instance
 
-## Privacy
+This application is deployed on **Streamlit Cloud** with automatic deployments from the `main` branch.
 
-All processing happens server-side. Files are temporarily stored during processing and automatically deleted when the session ends.
+- **Platform**: Streamlit Cloud (Community Tier)
+- **Auto-Deploy**: Enabled on every push to `main`
+- **Uptime**: 24/7 availability
+- **Repository**: Public (required for Streamlit Community hosting)
+
+### Deployment Configuration
+
+- **System Dependencies**: LibreOffice (via `packages.txt`)
+- **Python Dependencies**: All packages in `requirements.txt`
+- **Configuration**: Custom theme in `.streamlit/config.toml`
+- **Max Upload Size**: 200MB
+- **Processing**: Server-side with automatic cleanup
+
+### Making Changes
+
+1. Update files locally in `/mnt/c/Users/vanbo/Development/Projects/xAI/anonymous/vdr-processor-docx/ui/`
+2. Run sync script: `/tmp/sync_to_streamlit.sh`
+3. Changes automatically deploy within 1-2 minutes
+
+### Monitoring
+
+- Streamlit Cloud provides automatic health checks
+- Build logs available in Streamlit Cloud dashboard
+- App automatically restarts on deployment or errors
+
+## Privacy & Security
+
+- **Server-side Processing**: All operations happen on secure Streamlit servers
+- **Temporary Storage**: Files stored only during active session
+- **Automatic Cleanup**: All files deleted when session ends
+- **No Data Retention**: No documents are saved or logged
+- **HTTPS**: All traffic encrypted in transit
