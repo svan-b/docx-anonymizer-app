@@ -29,151 +29,166 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Bloomberg Terminal Aesthetic
+# Custom CSS - xAI Black & White Aesthetic
 st.markdown("""
 <style>
     /* Main container */
     .block-container {
-        padding-top: 2rem;
+        padding-top: 1rem;
         padding-bottom: 2rem;
         max-width: 1400px;
     }
 
     /* Headers */
     h1 {
-        font-family: 'monospace';
-        font-weight: 600;
+        font-family: sans-serif;
+        font-weight: 700;
         letter-spacing: -0.02em;
-        border-bottom: 2px solid #FF8C00;
+        border-bottom: 2px solid #FFFFFF;
         padding-bottom: 0.5rem;
         margin-bottom: 1.5rem;
+        color: #FFFFFF;
     }
 
     h2, h3 {
-        font-family: 'monospace';
-        font-weight: 500;
+        font-family: sans-serif;
+        font-weight: 600;
         letter-spacing: -0.01em;
-        color: #FF8C00;
+        color: #FFFFFF;
     }
 
     /* Metrics */
     [data-testid="stMetricValue"] {
         font-size: 2rem;
-        font-family: 'monospace';
-        font-weight: 600;
+        font-family: sans-serif;
+        font-weight: 700;
+        color: #FFFFFF;
     }
 
     [data-testid="stMetricLabel"] {
-        font-family: 'monospace';
+        font-family: sans-serif;
         font-size: 0.9rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        color: #CCCCCC;
     }
 
     /* Upload boxes */
     [data-testid="stFileUploader"] {
-        border: 2px solid #FF8C00;
+        border: 2px solid #FFFFFF;
         border-radius: 6px;
         padding: 1.25rem;
-        background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(26, 31, 58, 0.95) 100%);
-        box-shadow: 0 0 15px rgba(255, 140, 0, 0.15);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(26, 26, 26, 0.95) 100%);
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
         transition: all 0.3s ease;
     }
 
     [data-testid="stFileUploader"]:hover {
-        border-color: #FFA500;
-        box-shadow: 0 0 20px rgba(255, 140, 0, 0.25);
-        background: linear-gradient(135deg, rgba(255, 140, 0, 0.12) 0%, rgba(26, 31, 58, 0.95) 100%);
+        border-color: #FFFFFF;
+        box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(26, 26, 26, 0.95) 100%);
     }
 
     /* Upload button styling */
     [data-testid="stFileUploader"] section button {
-        background-color: rgba(255, 140, 0, 0.15) !important;
-        border: 1px solid #FF8C00 !important;
-        color: #FF8C00 !important;
-        font-family: 'monospace' !important;
-        font-weight: 500 !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
+        border: 1px solid #FFFFFF !important;
+        color: #FFFFFF !important;
+        font-family: sans-serif !important;
+        font-weight: 600 !important;
     }
 
     [data-testid="stFileUploader"] section button:hover {
-        background-color: rgba(255, 140, 0, 0.25) !important;
-        border-color: #FFA500 !important;
+        background-color: rgba(255, 255, 255, 0.2) !important;
+        border-color: #FFFFFF !important;
     }
 
     /* Buttons */
     .stButton>button {
-        font-family: 'monospace';
-        font-weight: 500;
+        font-family: sans-serif;
+        font-weight: 600;
         letter-spacing: 0.02em;
         border-radius: 4px;
-        border: 1px solid #FF8C00;
+        border: 1px solid #FFFFFF;
         transition: all 0.2s;
     }
 
     .stButton>button:hover {
-        border-color: #FFA500;
-        box-shadow: 0 0 10px rgba(255, 140, 0, 0.3);
+        border-color: #FFFFFF;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
     }
 
     /* Data tables */
     [data-testid="stDataFrame"] {
-        border: 1px solid #2A2F4A;
-        font-family: 'monospace';
+        border: 1px solid #333333;
+        font-family: sans-serif;
     }
 
     /* Progress bar */
     .stProgress > div > div > div > div {
-        background-color: #FF8C00;
+        background-color: #FFFFFF;
     }
 
     /* Expanders */
     [data-testid="stExpander"] {
-        border: 1px solid #2A2F4A;
+        border: 1px solid #333333;
         border-radius: 4px;
-        background-color: #1A1F3A;
+        background-color: #1A1A1A;
     }
 
     /* Dividers */
     hr {
-        border-color: #2A2F4A;
+        border-color: #333333;
         margin: 2rem 0;
     }
 
     /* Info boxes */
     .stAlert {
-        font-family: 'monospace';
+        font-family: sans-serif;
         border-radius: 4px;
     }
 
     /* Sidebar */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(15, 18, 41, 0.95) 0%, rgba(255, 140, 0, 0.08) 100%);
-        border-right: 2px solid rgba(255, 140, 0, 0.3);
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(255, 255, 255, 0.05) 100%);
+        border-right: 2px solid rgba(255, 255, 255, 0.2);
         backdrop-filter: blur(10px);
     }
 
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        color: #E8E8E8;
+        color: #FFFFFF;
     }
 
     /* Section containers */
     .section-container {
-        background: linear-gradient(135deg, rgba(26, 31, 58, 0.6) 0%, rgba(15, 18, 41, 0.8) 100%);
-        border: 1px solid #2A2F4A;
+        background: linear-gradient(135deg, rgba(26, 26, 26, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);
+        border: 1px solid #333333;
         border-radius: 8px;
         padding: 1.5rem;
         margin: 1rem 0;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
     }
 
     /* Status indicator */
     .status-box {
         padding: 0.75rem 1rem;
-        border-left: 3px solid #FF8C00;
-        background-color: #1A1F3A;
+        border-left: 3px solid #FFFFFF;
+        background-color: #1A1A1A;
         border-radius: 4px;
         margin: 0.5rem 0;
-        font-family: 'monospace';
+        font-family: sans-serif;
+    }
+
+    /* xAI Logo styling */
+    .xai-logo {
+        text-align: center;
+        padding: 1rem 0 0.5rem 0;
+        margin-bottom: 1rem;
+    }
+
+    .xai-logo img {
+        height: 50px;
+        filter: brightness(0) invert(1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -192,8 +207,14 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# Header
-st.title("🔒 DOCX ANONYMIZER")
+# xAI Logo and Header
+st.markdown("""
+<div class="xai-logo">
+    <img src="https://x.ai/static/images/logo.svg" alt="xAI" onerror="this.onerror=null; this.src='https://www.x.ai/favicon.ico'; this.style.height='40px';">
+</div>
+""", unsafe_allow_html=True)
+
+st.title("DOCX ANONYMIZER")
 st.caption("PROFESSIONAL DOCUMENT ANONYMIZATION SYSTEM")
 
 # Sidebar configuration
