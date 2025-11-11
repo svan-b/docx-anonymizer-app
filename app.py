@@ -258,8 +258,12 @@ for key, default in [
         st.session_state[key] = default
 
 # xAI Logo and Header
-with open("/tmp/docx-anonymizer-app/xai_logo.png", "rb") as f:
-    import base64
+import base64
+from pathlib import Path
+
+# Use relative path to work on both local and Streamlit Cloud
+logo_path = Path(__file__).parent / "xai_logo.png"
+with open(logo_path, "rb") as f:
     logo_data = base64.b64encode(f.read()).decode()
     st.markdown(f"""
     <div class="xai-logo-header">
