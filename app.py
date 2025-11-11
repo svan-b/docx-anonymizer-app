@@ -495,25 +495,31 @@ if execute_btn:
 
         st.divider()
 
-        # Compact processing display
-        st.markdown('<div class="section-container">', unsafe_allow_html=True)
-        st.markdown('<h2 style="margin: 0 0 1rem 0; font-size: 1.4rem; font-weight: 500; letter-spacing: 0.05em;">PROCESSING FILES...</h2>', unsafe_allow_html=True)
+        # Create a container for the entire processing section that we can clear later
+        processing_container = st.container()
 
-        # Simple progress indicators
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        metrics_cols = st.columns(4)
+        with processing_container:
+            st.markdown('<div class="section-container">', unsafe_allow_html=True)
+            st.markdown('<h2 style="margin: 0 0 1rem 0; font-size: 1.4rem; font-weight: 500; letter-spacing: 0.05em;">PROCESSING FILES...</h2>', unsafe_allow_html=True)
 
-        with metrics_cols[0]:
-            files_metric = st.metric("FILES", f"0/{len(files_to_process)}")
-        with metrics_cols[1]:
-            replacements_metric = st.metric("REPLACEMENTS", "0")
-        with metrics_cols[2]:
-            images_metric = st.metric("IMAGES REMOVED", "0")
-        with metrics_cols[3]:
-            pdf_metric = st.metric("PDF STATUS", "⏳")
+            # Simple progress indicators using empty containers for in-place updates
+            progress_bar = st.progress(0)
+            status_text = st.empty()
 
-        st.markdown('</div>', unsafe_allow_html=True)
+            # Create empty containers for metrics
+            metrics_cols = st.columns(4)
+            metric_containers = []
+            for col in metrics_cols:
+                with col:
+                    metric_containers.append(st.empty())
+
+            # Initialize display
+            metric_containers[0].metric("FILES", f"0/{len(files_to_process)}")
+            metric_containers[1].metric("REPLACEMENTS", "0")
+            metric_containers[2].metric("IMAGES REMOVED", "0")
+            metric_containers[3].metric("PDF STATUS", "⏳")
+
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # Initialize counters and logs
         total_replacements = 0
@@ -623,18 +629,15 @@ if execute_btn:
             # Store log entry
             st.session_state.processing_logs.append(log_entry)
 
-            # Update progress and metrics
+            # Update progress and metrics IN PLACE
             progress_bar.progress((i + 1) / len(files_to_process))
 
-            with metrics_cols[0]:
-                st.metric("FILES", f"{i+1}/{len(files_to_process)}")
-            with metrics_cols[1]:
-                st.metric("REPLACEMENTS", f"{total_replacements:,}")
-            with metrics_cols[2]:
-                st.metric("IMAGES REMOVED", f"{total_images:,}")
-            with metrics_cols[3]:
-                pdf_success = sum(1 for r in results if '✓' in r.get('pdf_status', ''))
-                st.metric("PDF SUCCESS", f"{pdf_success}/{i+1}")
+            # Update metric containers instead of creating new metrics
+            metric_containers[0].metric("FILES", f"{i+1}/{len(files_to_process)}")
+            metric_containers[1].metric("REPLACEMENTS", f"{total_replacements:,}")
+            metric_containers[2].metric("IMAGES REMOVED", f"{total_images:,}")
+            pdf_success = sum(1 for r in results if '✓' in r.get('pdf_status', ''))
+            metric_containers[3].metric("PDF SUCCESS", f"{pdf_success}/{i+1}")
 
         # Clear status and show completion
         status_text.success("✓ Processing Complete!")
@@ -666,6 +669,7 @@ if execute_btn:
             st.session_state.pdf_zip_data = f.read()
 
         st.session_state.processing_complete = True
+        st.rerun()  # Reload page to show only results, hiding processing section
 
 # Results display
 if st.session_state.processing_complete:
