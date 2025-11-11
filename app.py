@@ -29,166 +29,215 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - xAI Black & White Aesthetic
+# Custom CSS - xAI Soft Aesthetic
 st.markdown("""
 <style>
     /* Main container */
     .block-container {
         padding-top: 1rem;
-        padding-bottom: 2rem;
+        padding-bottom: 3rem;
         max-width: 1400px;
     }
 
     /* Headers */
     h1 {
-        font-family: sans-serif;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        border-bottom: 2px solid #FFFFFF;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1.5rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 300;
+        letter-spacing: -0.03em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
         color: #FFFFFF;
     }
 
     h2, h3 {
-        font-family: sans-serif;
-        font-weight: 600;
-        letter-spacing: -0.01em;
-        color: #FFFFFF;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 400;
+        letter-spacing: -0.02em;
+        color: rgba(255, 255, 255, 0.95);
+    }
+
+    h3 {
+        font-size: 1.1rem;
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 500;
     }
 
     /* Metrics */
     [data-testid="stMetricValue"] {
         font-size: 2rem;
-        font-family: sans-serif;
-        font-weight: 700;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 300;
         color: #FFFFFF;
     }
 
     [data-testid="stMetricLabel"] {
-        font-family: sans-serif;
-        font-size: 0.9rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #CCCCCC;
+        letter-spacing: 0.1em;
+        color: rgba(255, 255, 255, 0.5);
+        font-weight: 500;
     }
 
     /* Upload boxes */
     [data-testid="stFileUploader"] {
-        border: 2px solid #FFFFFF;
-        border-radius: 6px;
-        padding: 1.25rem;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(26, 26, 26, 0.95) 100%);
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
-        transition: all 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.02);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     [data-testid="stFileUploader"]:hover {
-        border-color: #FFFFFF;
-        box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(26, 26, 26, 0.95) 100%);
+        border-color: rgba(255, 255, 255, 0.25);
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+        background: rgba(255, 255, 255, 0.04);
+        transform: translateY(-2px);
     }
 
     /* Upload button styling */
     [data-testid="stFileUploader"] section button {
-        background-color: rgba(255, 255, 255, 0.1) !important;
-        border: 1px solid #FFFFFF !important;
-        color: #FFFFFF !important;
-        font-family: sans-serif !important;
-        font-weight: 600 !important;
+        background-color: rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+        font-weight: 400 !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1rem !important;
+        transition: all 0.3s ease !important;
     }
 
     [data-testid="stFileUploader"] section button:hover {
-        background-color: rgba(255, 255, 255, 0.2) !important;
-        border-color: #FFFFFF !important;
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.3) !important;
+        transform: translateY(-1px) !important;
     }
 
     /* Buttons */
     .stButton>button {
-        font-family: sans-serif;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        border-radius: 4px;
-        border: 1px solid #FFFFFF;
-        transition: all 0.2s;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.01em;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 0.75rem 2rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: rgba(255, 255, 255, 0.05);
     }
 
     .stButton>button:hover {
-        border-color: #FFFFFF;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.4);
+        box-shadow: 0 8px 24px rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateY(-2px);
     }
 
     /* Data tables */
     [data-testid="stDataFrame"] {
-        border: 1px solid #333333;
-        font-family: sans-serif;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        border-radius: 12px;
+        overflow: hidden;
     }
 
     /* Progress bar */
     .stProgress > div > div > div > div {
-        background-color: #FFFFFF;
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.95) 100%);
+        border-radius: 10px;
     }
 
     /* Expanders */
     [data-testid="stExpander"] {
-        border: 1px solid #333333;
-        border-radius: 4px;
-        background-color: #1A1A1A;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        background-color: rgba(255, 255, 255, 0.02);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
 
     /* Dividers */
     hr {
-        border-color: #333333;
-        margin: 2rem 0;
+        border-color: rgba(255, 255, 255, 0.1);
+        margin: 3rem 0;
+        opacity: 0.5;
     }
 
     /* Info boxes */
     .stAlert {
-        font-family: sans-serif;
-        border-radius: 4px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
     }
 
     /* Sidebar */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(0, 0, 0, 0.95) 0%, rgba(255, 255, 255, 0.05) 100%);
-        border-right: 2px solid rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(10px);
+        background: rgba(0, 0, 0, 0.6);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(20px);
     }
 
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
-        color: #FFFFFF;
+        color: rgba(255, 255, 255, 0.9);
     }
 
     /* Section containers */
     .section-container {
-        background: linear-gradient(135deg, rgba(26, 26, 26, 0.6) 0%, rgba(0, 0, 0, 0.8) 100%);
-        border: 1px solid #333333;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 2.5rem;
+        margin: 2rem 0;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+    }
+
+    .section-container:hover {
+        box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+        border-color: rgba(255, 255, 255, 0.15);
     }
 
     /* Status indicator */
     .status-box {
-        padding: 0.75rem 1rem;
-        border-left: 3px solid #FFFFFF;
-        background-color: #1A1A1A;
-        border-radius: 4px;
-        margin: 0.5rem 0;
-        font-family: sans-serif;
+        padding: 1rem 1.5rem;
+        border-left: 2px solid rgba(255, 255, 255, 0.3);
+        background-color: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        margin: 0.75rem 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 300;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
 
     /* xAI Logo styling */
-    .xai-logo {
-        text-align: center;
-        padding: 1rem 0 0.5rem 0;
+    .xai-logo-header {
+        position: relative;
+        padding: 1.5rem 0 2rem 0;
         margin-bottom: 1rem;
     }
 
-    .xai-logo img {
-        height: 50px;
-        filter: brightness(0) invert(1);
+    .xai-logo-text {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 2.5rem;
+        font-weight: 200;
+        letter-spacing: 0.3em;
+        color: rgba(255, 255, 255, 0.95);
+        text-align: left;
+    }
+
+    /* Checkboxes */
+    [data-testid="stCheckbox"] {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-weight: 400;
+    }
+
+    /* Success/Info messages */
+    .stSuccess, .stInfo {
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -209,8 +258,8 @@ for key, default in [
 
 # xAI Logo and Header
 st.markdown("""
-<div class="xai-logo">
-    <img src="https://x.ai/static/images/logo.svg" alt="xAI" onerror="this.onerror=null; this.src='https://www.x.ai/favicon.ico'; this.style.height='40px';">
+<div class="xai-logo-header">
+    <div class="xai-logo-text">xAI</div>
 </div>
 """, unsafe_allow_html=True)
 
