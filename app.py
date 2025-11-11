@@ -372,7 +372,7 @@ st.markdown('<div class="section-container">', unsafe_allow_html=True)
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     execute_btn = st.button(
-        "⚡ EXECUTE ANONYMIZATION",
+        "EXECUTE ANONYMIZATION",
         type="primary",
         disabled=(not docx_files or not excel_file),
         use_container_width=True
@@ -514,15 +514,15 @@ if execute_btn:
                             if expected_output != pdf_output_path:
                                 shutil.move(str(expected_output), str(pdf_output_path))
 
-                            size_mb = pdf_output_path.stat().st_size / (1024 * 1024)
-                            st.success(f"✓ PDF created ({size_mb:.1f}MB)")
+                            size_kb = pdf_output_path.stat().st_size / 1024
+                            st.success(f"✓ PDF created ({size_kb:.0f} KB)")
 
                             results.append({
                                 'filename': original_name,
                                 'replacements': replacements,
                                 'images': images,
                                 'pdf_status': '✓ Success',
-                                'pdf_size_mb': round(size_mb, 1)
+                                'pdf_size_kb': round(size_kb)
                             })
                         else:
                             st.warning("⚠ PDF conversion failed")
@@ -531,7 +531,7 @@ if execute_btn:
                                 'replacements': replacements,
                                 'images': images,
                                 'pdf_status': '✗ Failed',
-                                'pdf_size_mb': 0
+                                'pdf_size_kb': 0
                             })
 
                     except subprocess.TimeoutExpired:
@@ -541,7 +541,7 @@ if execute_btn:
                             'replacements': replacements,
                             'images': images,
                             'pdf_status': '⚠ Timeout',
-                            'pdf_size_mb': 0
+                            'pdf_size_kb': 0
                         })
                     except Exception as e:
                         st.warning(f"⚠ PDF error: {e}")
@@ -550,7 +550,7 @@ if execute_btn:
                             'replacements': replacements,
                             'images': images,
                             'pdf_status': '✗ Error',
-                            'pdf_size_mb': 0
+                            'pdf_size_kb': 0
                         })
 
                 except Exception as e:
@@ -650,35 +650,4 @@ if st.session_state.processing_complete:
             hide_index=True
         )
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([2, 2, 1])
-
-    with col1:
-        if st.session_state.docx_zip_data:
-            st.download_button(
-                label="📦 DOWNLOAD DOCX ARCHIVE",
-                data=st.session_state.docx_zip_data,
-                file_name=f"anonymized_docx_{st.session_state.timestamp}.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
-
-    with col2:
-        if st.session_state.pdf_zip_data:
-            st.download_button(
-                label="📦 DOWNLOAD PDF ARCHIVE",
-                data=st.session_state.pdf_zip_data,
-                file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
-                mime="application/zip",
-                use_container_width=True
-            )
-
-    with col3:
-        if st.button("🔄 NEW BATCH", use_container_width=True):
-            for key in ['processing_complete', 'results', 'docx_zip_data', 'pdf_zip_data',
-                       'docx_files_uploaded', 'excel_loaded']:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
