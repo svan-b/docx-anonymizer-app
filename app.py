@@ -458,7 +458,7 @@ if execute_btn:
 
         st.divider()
         st.markdown('<div class="section-container">', unsafe_allow_html=True)
-        st.markdown('<div style="text-align: center; padding: 1rem 0 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem;"><h3 style="margin: 0; font-size: 1.5rem; font-weight: 300; letter-spacing: 0.1em;">⚙️ PROCESSING PIPELINE</h3></div>', unsafe_allow_html=True)
+        st.markdown('<h2 style="margin: 0 0 1.5rem 0; font-size: 1.8rem; font-weight: 500; letter-spacing: 0.05em;">PROCESSING PIPELINE</h2>', unsafe_allow_html=True)
 
         total_replacements = 0
         total_images = 0
@@ -603,40 +603,54 @@ if execute_btn:
 if st.session_state.processing_complete:
     st.divider()
     st.markdown('<div class="section-container">', unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center; padding: 1rem 0 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem;"><h3 style="margin: 0; font-size: 1.5rem; font-weight: 300; letter-spacing: 0.1em;">📊 PROCESSING SUMMARY</h3></div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="display: flex; gap: 1.5rem; margin: 2rem 0;">', unsafe_allow_html=True)
-    col1, col2, col3, col4 = st.columns(4)
+    # Compact header with metrics in ONE ROW
+    st.markdown('<h2 style="margin: 0 0 1rem 0; font-size: 2rem; font-weight: 500;">RESULTS</h2>', unsafe_allow_html=True)
+
+    # Single row layout: metrics + downloads
+    col1, col2, col3 = st.columns([2, 2, 3])
+
     with col1:
-        st.markdown('<div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; text-align: center;">', unsafe_allow_html=True)
-        st.metric("FILES PROCESSED", st.session_state.total_files)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size: 1.1rem; line-height: 1.8;"><strong>Files:</strong> {st.session_state.total_files} | <strong>Replacements:</strong> {st.session_state.total_replacements}<br><strong>Images:</strong> {st.session_state.total_images} | <strong>Batch:</strong> {st.session_state.timestamp[-6:]}</div>', unsafe_allow_html=True)
+
     with col2:
-        st.markdown('<div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; text-align: center;">', unsafe_allow_html=True)
-        st.metric("TOTAL REPLACEMENTS", st.session_state.total_replacements)
-        st.markdown('</div>', unsafe_allow_html=True)
+        if st.session_state.docx_zip_data:
+            st.download_button(
+                label="DOWNLOAD DOCX",
+                data=st.session_state.docx_zip_data,
+                file_name=f"anonymized_docx_{st.session_state.timestamp}.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+
     with col3:
-        st.markdown('<div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; text-align: center;">', unsafe_allow_html=True)
-        st.metric("IMAGES REMOVED", st.session_state.total_images)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown('<div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; text-align: center;">', unsafe_allow_html=True)
-        st.metric("BATCH ID", st.session_state.timestamp[-6:])
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        colA, colB = st.columns(2)
+        with colA:
+            if st.session_state.pdf_zip_data:
+                st.download_button(
+                    label="DOWNLOAD PDF",
+                    data=st.session_state.pdf_zip_data,
+                    file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+        with colB:
+            if st.button("NEW BATCH", use_container_width=True):
+                st.session_state.processing_complete = False
+                st.session_state.results = []
+                st.session_state.docx_zip_data = None
+                st.session_state.pdf_zip_data = None
+                st.rerun()
 
-    # Results table
-    st.markdown('<div style="margin-top: 2.5rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.05);"><h4 style="font-weight: 300; letter-spacing: 0.08em; margin-bottom: 1.5rem;">DETAILED RESULTS</h4></div>', unsafe_allow_html=True)
-    st.dataframe(
-        st.session_state.results,
-        use_container_width=True,
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Collapsible detailed results
+    with st.expander("VIEW DETAILED RESULTS", expanded=False):
+        st.dataframe(
+            st.session_state.results,
+            use_container_width=True,
+            hide_index=True
+        )
 
-    st.divider()
-    st.markdown('<div class="section-container">', unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center; padding: 1rem 0 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 2.5rem;"><h3 style="margin: 0; font-size: 1.5rem; font-weight: 300; letter-spacing: 0.1em;">📦 DOWNLOAD ARCHIVES</h3></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([2, 2, 1])
 
