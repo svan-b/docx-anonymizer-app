@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-DOCX Anonymizer + PDF Converter - Streamlit App
-Drag and drop DOCX files + Excel requirements to anonymize and convert to PDF
+DOCX Anonymizer + PDF Converter
+Professional document anonymization tool for financial data rooms
 """
 import streamlit as st
 import sys
@@ -13,7 +13,7 @@ import subprocess
 import zipfile
 from datetime import datetime
 
-# Import our anonymization functions (now in same directory)
+# Import anonymization functions
 from process_adobe_word_files import (
     load_aliases_from_excel,
     categorize_and_sort_aliases,
@@ -21,96 +21,267 @@ from process_adobe_word_files import (
 )
 import logging
 
-# Configure page
+# Page configuration
 st.set_page_config(
-    page_title="DOCX Anonymizer + PDF Converter",
-    page_icon="📄",
-    layout="wide"
+    page_title="DOCX Anonymizer",
+    page_icon="🔒",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Initialize session state for results persistence
-if 'processing_complete' not in st.session_state:
-    st.session_state.processing_complete = False
-if 'results' not in st.session_state:
-    st.session_state.results = []
-if 'total_files' not in st.session_state:
-    st.session_state.total_files = 0
-if 'total_replacements' not in st.session_state:
-    st.session_state.total_replacements = 0
-if 'total_images' not in st.session_state:
-    st.session_state.total_images = 0
-if 'docx_zip_data' not in st.session_state:
-    st.session_state.docx_zip_data = None
-if 'pdf_zip_data' not in st.session_state:
-    st.session_state.pdf_zip_data = None
-if 'timestamp' not in st.session_state:
-    st.session_state.timestamp = None
+# Custom CSS - Bloomberg Terminal Aesthetic
+st.markdown("""
+<style>
+    /* Main container */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1400px;
+    }
 
-# Title and description
-st.title("📄 DOCX Anonymizer + PDF Converter")
+    /* Headers */
+    h1 {
+        font-family: 'monospace';
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        border-bottom: 2px solid #FF8C00;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
 
-# File uploads
-col1, col2 = st.columns([2, 1])
+    h2, h3 {
+        font-family: 'monospace';
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        color: #FF8C00;
+    }
+
+    /* Metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-family: 'monospace';
+        font-weight: 600;
+    }
+
+    [data-testid="stMetricLabel"] {
+        font-family: 'monospace';
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Upload boxes */
+    [data-testid="stFileUploader"] {
+        border: 1px solid #2A2F4A;
+        border-radius: 4px;
+        padding: 1rem;
+        background-color: #1A1F3A;
+    }
+
+    /* Buttons */
+    .stButton>button {
+        font-family: 'monospace';
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        border-radius: 4px;
+        border: 1px solid #FF8C00;
+        transition: all 0.2s;
+    }
+
+    .stButton>button:hover {
+        border-color: #FFA500;
+        box-shadow: 0 0 10px rgba(255, 140, 0, 0.3);
+    }
+
+    /* Data tables */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #2A2F4A;
+        font-family: 'monospace';
+    }
+
+    /* Progress bar */
+    .stProgress > div > div > div > div {
+        background-color: #FF8C00;
+    }
+
+    /* Expanders */
+    [data-testid="stExpander"] {
+        border: 1px solid #2A2F4A;
+        border-radius: 4px;
+        background-color: #1A1F3A;
+    }
+
+    /* Dividers */
+    hr {
+        border-color: #2A2F4A;
+        margin: 2rem 0;
+    }
+
+    /* Info boxes */
+    .stAlert {
+        font-family: 'monospace';
+        border-radius: 4px;
+    }
+
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #0F1229;
+        border-right: 1px solid #2A2F4A;
+    }
+
+    /* Status indicator */
+    .status-box {
+        padding: 0.75rem 1rem;
+        border-left: 3px solid #FF8C00;
+        background-color: #1A1F3A;
+        border-radius: 4px;
+        margin: 0.5rem 0;
+        font-family: 'monospace';
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Session state initialization
+for key, default in [
+    ('processing_complete', False),
+    ('results', []),
+    ('total_files', 0),
+    ('total_replacements', 0),
+    ('total_images', 0),
+    ('docx_zip_data', None),
+    ('pdf_zip_data', None),
+    ('timestamp', None)
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+# Header
+st.title("🔒 DOCX ANONYMIZER")
+st.caption("PROFESSIONAL DOCUMENT ANONYMIZATION SYSTEM")
+
+# Sidebar configuration
+with st.sidebar:
+    st.header("SYSTEM STATUS")
+
+    if docx_files := st.session_state.get('docx_files_uploaded'):
+        st.metric("FILES QUEUED", len(docx_files))
+    else:
+        st.metric("FILES QUEUED", 0)
+
+    if st.session_state.get('excel_loaded'):
+        st.success("✓ MAPPINGS LOADED")
+    else:
+        st.warning("○ AWAITING MAPPINGS")
+
+    st.divider()
+    st.markdown("### OPERATION GUIDE")
+    st.caption("""
+    **STEP 1** → Upload source documents
+    **STEP 2** → Upload Excel mappings
+    **STEP 3** → Configure options
+    **STEP 4** → Execute anonymization
+    **STEP 5** → Download results
+    """)
+
+    st.divider()
+    st.markdown("### TECHNICAL SPECS")
+    st.caption("""
+    **Format Support:** DOCX, DOC
+    **Output:** DOCX + PDF
+    **Max File Size:** 200MB
+    **Batch Processing:** Enabled
+    **PDF Engine:** LibreOffice
+    """)
+
+# Main interface
+st.markdown("### INPUT CONFIGURATION")
+
+col1, col2 = st.columns([3, 2])
 
 with col1:
-    st.subheader("1. Upload Word Files")
+    st.markdown("#### SOURCE DOCUMENTS")
     docx_files = st.file_uploader(
-        "Drag and drop DOCX or DOC files here",
+        "Upload DOCX or DOC files",
         type=['docx', 'doc'],
         accept_multiple_files=True,
-        key="docx_upload"
+        key="docx_upload",
+        help="Supports batch processing of multiple files"
     )
+    if docx_files:
+        st.session_state.docx_files_uploaded = docx_files
+        st.success(f"✓ {len(docx_files)} file(s) loaded")
 
 with col2:
-    st.subheader("2. Upload Requirements Excel")
+    st.markdown("#### ANONYMIZATION MAPPINGS")
     excel_file = st.file_uploader(
-        "Before/After mappings (.xlsx)",
+        "Upload Excel requirements",
         type=['xlsx'],
-        key="excel_upload"
+        key="excel_upload",
+        help="Column 1: Before | Column 2: After"
     )
+    if excel_file:
+        st.session_state.excel_loaded = True
+        st.success("✓ Mappings ready")
 
 st.divider()
 
 # Processing options
-st.subheader("3. Processing Options")
+st.markdown("### PROCESSING OPTIONS")
 col1, col2 = st.columns(2)
+
 with col1:
-    remove_images = st.checkbox("Remove all images from document", value=True, key="remove_images")
+    remove_images = st.checkbox(
+        "REMOVE ALL IMAGES",
+        value=True,
+        key="remove_images",
+        help="Strips all embedded images from documents"
+    )
+
 with col2:
-    clear_headers_footers = st.checkbox("Clear headers/footers (for presentations with logos)", value=False, key="clear_headers_footers")
+    clear_headers_footers = st.checkbox(
+        "CLEAR HEADERS/FOOTERS",
+        value=False,
+        key="clear_headers_footers",
+        help="Removes logo and text from headers/footers"
+    )
 
 st.divider()
 
-# Process button
-if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or not excel_file)):
-    # Reset session state for new processing
+# Execute button
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    execute_btn = st.button(
+        "⚡ EXECUTE ANONYMIZATION",
+        type="primary",
+        disabled=(not docx_files or not excel_file),
+        use_container_width=True
+    )
+
+if execute_btn:
+    # Reset state
     st.session_state.processing_complete = False
     st.session_state.results = []
     st.session_state.docx_zip_data = None
     st.session_state.pdf_zip_data = None
 
-    # Validate LibreOffice is available
-    with st.spinner("Checking LibreOffice installation..."):
+    # Validate LibreOffice
+    with st.spinner("Validating PDF conversion engine..."):
         try:
             result = subprocess.run(['soffice', '--version'], capture_output=True, timeout=5)
             if result.returncode != 0:
-                st.error("❌ LibreOffice not found. Please install LibreOffice to use this tool.")
-                st.info("Ubuntu/WSL: `sudo apt-get install libreoffice`")
+                st.error("❌ LibreOffice not found")
+                st.info("Install: `sudo apt-get install libreoffice`")
                 st.stop()
-        except FileNotFoundError:
-            st.error("❌ LibreOffice not found. Please install LibreOffice to use this tool.")
-            st.info("Ubuntu/WSL: `sudo apt-get install libreoffice`")
-            st.stop()
-        except Exception as e:
-            st.error(f"❌ Error checking LibreOffice: {e}")
+        except (FileNotFoundError, Exception) as e:
+            st.error(f"❌ PDF engine error: {e}")
             st.stop()
 
-    # Defensive check - ensure files are still present
+    # Validate files
     if not docx_files or not excel_file:
-        st.error("❌ Files are missing. Please upload both DOCX files and Excel requirements.")
+        st.error("❌ Missing required files")
         st.stop()
 
-    # Create temporary directories
+    # Processing pipeline
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         input_dir = temp_path / "input"
@@ -126,39 +297,30 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
         with open(excel_path, 'wb') as f:
             f.write(excel_file.getbuffer())
 
-        # Save Word files and convert .doc to .docx if needed
+        # Save and convert input files
         files_to_process = []
         for docx_file in docx_files:
             file_path = input_dir / docx_file.name
             with open(file_path, 'wb') as f:
                 f.write(docx_file.getbuffer())
 
-            # Convert .doc to .docx using LibreOffice
+            # Convert .doc to .docx if needed
             if docx_file.name.lower().endswith('.doc') and not docx_file.name.lower().endswith('.docx'):
-                st.info(f"Converting {docx_file.name} from DOC to DOCX...")
-                try:
-                    cmd = [
-                        'soffice',
-                        '--headless',
-                        '--norestore',
-                        '--nologo',
-                        '--nofirststartwizard',
-                        '--convert-to', 'docx',
-                        '--outdir', str(input_dir),
-                        str(file_path)
-                    ]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-
-                    # Check for converted file
-                    converted_path = file_path.with_suffix('.docx')
-                    if converted_path.exists():
-                        files_to_process.append((docx_file.name, converted_path))
-                    else:
-                        st.error(f"Failed to convert {docx_file.name}")
-                        continue
-                except Exception as e:
-                    st.error(f"Error converting {docx_file.name}: {e}")
-                    continue
+                with st.spinner(f"Converting {docx_file.name} to DOCX..."):
+                    try:
+                        cmd = [
+                            'soffice', '--headless', '--norestore', '--nologo',
+                            '--nofirststartwizard', '--convert-to', 'docx',
+                            '--outdir', str(input_dir), str(file_path)
+                        ]
+                        subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                        converted_path = file_path.with_suffix('.docx')
+                        if converted_path.exists():
+                            files_to_process.append((docx_file.name, converted_path))
+                        else:
+                            st.error(f"Conversion failed: {docx_file.name}")
+                    except Exception as e:
+                        st.error(f"Conversion error: {e}")
             else:
                 files_to_process.append((docx_file.name, file_path))
 
@@ -167,33 +329,34 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
             try:
                 alias_map = load_aliases_from_excel(excel_path)
                 sorted_keys = categorize_and_sort_aliases(alias_map)
-                st.success(f"✓ Loaded {len(alias_map)} mappings")
+                st.success(f"✓ {len(alias_map)} mappings loaded")
             except Exception as e:
-                st.error(f"Error loading mappings: {e}")
+                st.error(f"Mapping error: {e}")
                 st.stop()
 
         st.divider()
-        st.subheader("📝 Processing Files")
+        st.markdown("### PROCESSING PIPELINE")
 
-        # Process each file
         total_replacements = 0
         total_images = 0
         results = []
 
         progress_bar = st.progress(0)
-        status_text = st.empty()
+        status_container = st.empty()
 
         logger = logging.getLogger(__name__)
 
         for i, (original_name, input_path) in enumerate(files_to_process):
-            status_text.text(f"Processing {i+1}/{len(files_to_process)}: {original_name}")
+            status_container.markdown(
+                f'<div class="status-box">PROCESSING [{i+1}/{len(files_to_process)}]: {original_name}</div>',
+                unsafe_allow_html=True
+            )
 
-            # Output name based on original file
             docx_output_path = docx_output_dir / Path(original_name).with_suffix('.docx').name
 
-            # Anonymize DOCX
-            with st.expander(f"📄 {original_name}", expanded=True):
+            with st.expander(f"📄 {original_name}", expanded=(i == 0)):
                 try:
+                    # Anonymize DOCX
                     replacements, images = process_single_docx(
                         input_path, docx_output_path, alias_map, sorted_keys, logger,
                         remove_images=remove_images,
@@ -205,30 +368,23 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
 
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.metric("Replacements", replacements)
+                        st.metric("REPLACEMENTS", replacements)
                     with col2:
-                        st.metric("Images Removed", images)
+                        st.metric("IMAGES REMOVED", images)
                     with col3:
-                        st.metric("Status", "✓ DOCX Done")
+                        st.metric("STATUS", "DOCX ✓")
 
                     # Convert to PDF
                     pdf_output_path = pdf_output_dir / Path(original_name).with_suffix('.pdf').name
 
                     try:
                         cmd = [
-                            'soffice',
-                            '--headless',
-                            '--norestore',
-                            '--nologo',
-                            '--nofirststartwizard',
-                            '--convert-to', 'pdf',
-                            '--outdir', str(pdf_output_dir),
-                            str(docx_output_path)
+                            'soffice', '--headless', '--norestore', '--nologo',
+                            '--nofirststartwizard', '--convert-to', 'pdf',
+                            '--outdir', str(pdf_output_dir), str(docx_output_path)
                         ]
+                        subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-                        # LibreOffice creates file with same stem
                         expected_output = pdf_output_dir / f"{docx_output_path.stem}.pdf"
 
                         if expected_output.exists():
@@ -236,57 +392,60 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
                                 shutil.move(str(expected_output), str(pdf_output_path))
 
                             size_mb = pdf_output_path.stat().st_size / (1024 * 1024)
-                            st.success(f"✓ PDF created ({size_mb:.1f} MB)")
+                            st.success(f"✓ PDF created ({size_mb:.1f}MB)")
 
                             results.append({
                                 'filename': original_name,
                                 'replacements': replacements,
                                 'images': images,
-                                'pdf_status': 'Success',
-                                'pdf_size_mb': size_mb
+                                'pdf_status': '✓ Success',
+                                'pdf_size_mb': round(size_mb, 1)
                             })
                         else:
-                            st.warning("⚠ PDF conversion failed - LibreOffice error")
+                            st.warning("⚠ PDF conversion failed")
                             results.append({
                                 'filename': original_name,
                                 'replacements': replacements,
                                 'images': images,
-                                'pdf_status': 'Failed',
+                                'pdf_status': '✗ Failed',
                                 'pdf_size_mb': 0
                             })
 
                     except subprocess.TimeoutExpired:
-                        st.warning("⚠ PDF conversion timeout (5 min exceeded)")
+                        st.warning("⚠ PDF timeout (5min exceeded)")
                         results.append({
                             'filename': original_name,
                             'replacements': replacements,
                             'images': images,
-                            'pdf_status': 'Timeout',
+                            'pdf_status': '⚠ Timeout',
                             'pdf_size_mb': 0
                         })
                     except Exception as e:
-                        st.warning(f"⚠ PDF conversion error: {e}")
+                        st.warning(f"⚠ PDF error: {e}")
                         results.append({
                             'filename': original_name,
                             'replacements': replacements,
                             'images': images,
-                            'pdf_status': 'Error',
+                            'pdf_status': '✗ Error',
                             'pdf_size_mb': 0
                         })
 
                 except Exception as e:
-                    st.error(f"❌ Error processing DOCX: {e}")
+                    st.error(f"❌ DOCX error: {e}")
                     results.append({
                         'filename': original_name,
                         'replacements': 0,
                         'images': 0,
-                        'pdf_status': 'DOCX Error',
+                        'pdf_status': '✗ DOCX Error',
                         'pdf_size_mb': 0
                     })
 
             progress_bar.progress((i + 1) / len(files_to_process))
 
-        status_text.text("✓ All files processed!")
+        status_container.markdown(
+            '<div class="status-box">✓ PIPELINE COMPLETE</div>',
+            unsafe_allow_html=True
+        )
 
         # Save results to session state
         st.session_state.results = results
@@ -295,10 +454,9 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
         st.session_state.total_images = total_images
         st.session_state.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # Create ZIP files and store in session state
+        # Create ZIP archives
         timestamp = st.session_state.timestamp
 
-        # ZIP anonymized DOCX files
         docx_zip_path = temp_path / f"anonymized_docx_{timestamp}.zip"
         with zipfile.ZipFile(docx_zip_path, 'w') as zipf:
             for docx_file in docx_output_dir.glob('*.docx'):
@@ -307,7 +465,6 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
         with open(docx_zip_path, 'rb') as f:
             st.session_state.docx_zip_data = f.read()
 
-        # ZIP PDFs
         pdf_zip_path = temp_path / f"anonymized_pdf_{timestamp}.zip"
         with zipfile.ZipFile(pdf_zip_path, 'w') as zipf:
             for pdf_file in pdf_output_dir.glob('*.pdf'):
@@ -318,62 +475,58 @@ if st.button("🚀 Process Files", type="primary", disabled=(not docx_files or n
 
         st.session_state.processing_complete = True
 
-# Display results from session state (persists after download)
+# Results display
 if st.session_state.processing_complete:
     st.divider()
-    st.subheader("📊 Summary")
+    st.markdown("### PROCESSING SUMMARY")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Total Files", st.session_state.total_files)
+        st.metric("FILES PROCESSED", st.session_state.total_files)
     with col2:
-        st.metric("Total Replacements", st.session_state.total_replacements)
+        st.metric("TOTAL REPLACEMENTS", st.session_state.total_replacements)
     with col3:
-        st.metric("Total Images Removed", st.session_state.total_images)
+        st.metric("IMAGES REMOVED", st.session_state.total_images)
+    with col4:
+        st.metric("BATCH ID", st.session_state.timestamp[-6:])
 
-    # Show results table
-    st.dataframe(st.session_state.results, use_container_width=True)
+    # Results table
+    st.markdown("#### DETAILED RESULTS")
+    st.dataframe(
+        st.session_state.results,
+        use_container_width=True,
+        hide_index=True
+    )
 
     st.divider()
-    st.subheader("📥 Download Results")
-    st.info("Files are ready to download. Results remain visible after downloading.")
+    st.markdown("### DOWNLOAD ARCHIVES")
 
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2, col3 = st.columns([2, 2, 1])
 
     with col1:
         if st.session_state.docx_zip_data:
             st.download_button(
-                label="📦 Download DOCX (ZIP)",
+                label="📦 DOWNLOAD DOCX ARCHIVE",
                 data=st.session_state.docx_zip_data,
                 file_name=f"anonymized_docx_{st.session_state.timestamp}.zip",
-                mime="application/zip"
+                mime="application/zip",
+                use_container_width=True
             )
 
     with col2:
         if st.session_state.pdf_zip_data:
             st.download_button(
-                label="📦 Download PDFs (ZIP)",
+                label="📦 DOWNLOAD PDF ARCHIVE",
                 data=st.session_state.pdf_zip_data,
                 file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
-                mime="application/zip"
+                mime="application/zip",
+                use_container_width=True
             )
 
     with col3:
-        if st.button("🔄 Start New Batch"):
-            st.session_state.processing_complete = False
-            st.session_state.results = []
-            st.session_state.docx_zip_data = None
-            st.session_state.pdf_zip_data = None
+        if st.button("🔄 NEW BATCH", use_container_width=True):
+            for key in ['processing_complete', 'results', 'docx_zip_data', 'pdf_zip_data',
+                       'docx_files_uploaded', 'excel_loaded']:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
-
-# Sidebar info
-with st.sidebar:
-    st.header("Stats")
-    if docx_files:
-        st.metric("DOCX Files", len(docx_files))
-    if excel_file:
-        st.success("✓ Requirements loaded")
-
-    st.divider()
-    st.caption("Excel format: Column 1 = Before, Column 2 = After")
-    st.caption("Results persist after download")
