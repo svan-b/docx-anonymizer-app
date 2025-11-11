@@ -23,8 +23,8 @@ import logging
 
 # Page configuration
 st.set_page_config(
-    page_title="DOCX Anonymizer",
-    page_icon="🔒",
+    page_title="DOCX Anonymizer - xAI",
+    page_icon="xai_logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
