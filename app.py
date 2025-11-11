@@ -215,17 +215,18 @@ st.markdown("""
     /* xAI Logo styling */
     .xai-logo-header {
         position: relative;
-        padding: 1.5rem 0 2rem 0;
+        padding: 1rem 0 2rem 0;
         margin-bottom: 1rem;
+        display: inline-block;
     }
 
-    .xai-logo-text {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 2.5rem;
-        font-weight: 200;
-        letter-spacing: 0.3em;
-        color: rgba(255, 255, 255, 0.95);
-        text-align: left;
+    .xai-logo-img {
+        height: 60px;
+        width: auto;
+        background-color: #FFFFFF;
+        padding: 12px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(255, 255, 255, 0.1);
     }
 
     /* Checkboxes */
@@ -257,11 +258,14 @@ for key, default in [
         st.session_state[key] = default
 
 # xAI Logo and Header
-st.markdown("""
-<div class="xai-logo-header">
-    <div class="xai-logo-text">xAI</div>
-</div>
-""", unsafe_allow_html=True)
+with open("/tmp/docx-anonymizer-app/xai_logo.png", "rb") as f:
+    import base64
+    logo_data = base64.b64encode(f.read()).decode()
+    st.markdown(f"""
+    <div class="xai-logo-header">
+        <img src="data:image/png;base64,{logo_data}" alt="xAI" class="xai-logo-img">
+    </div>
+    """, unsafe_allow_html=True)
 
 st.title("DOCX ANONYMIZER")
 st.caption("PROFESSIONAL DOCUMENT ANONYMIZATION SYSTEM")
