@@ -2,25 +2,37 @@ name: Health Check
 
 on:
   schedule:
-    # Run every 6 hours
+    # Run every 6 hours to keep the app active
     - cron: '0 */6 * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   health-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Check if app is accessible
+      - name: Check App Health
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
-          if [ $response -eq 200 ]; then
-            echo "✓ App is healthy (HTTP $response)"
+          echo "Checking app health at https://docx-anonymizer-app.streamlit.app"
+
+          # Follow redirects with -L flag and get final status code
+          response=$(curl -L -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
+
+          echo "App returned HTTP $response"
+
+          # Accept 200 (OK), 303 (redirect), or any 2xx status
+          if [[ $response == 2* ]] || [[ $response == 303 ]]; then
+            echo "✓ App is healthy"
+            exit 0
           else
-            echo "⚠ App returned HTTP $response"
+            echo "✗ App health check failed with status $response"
             exit 1
           fi
 
-      - name: Notify on failure
+      - name: Wake App if Sleeping
         if: failure()
         run: |
-          echo "App health check failed - please investigate"
+          echo "Attempting to wake sleeping app..."
+          curl -L --max-time 60 https://docx-anonymizer-app.streamlit.app || true
+          sleep 10
+          response=$(curl -L -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
+          echo "App returned HTTP $response after wake attempt"
