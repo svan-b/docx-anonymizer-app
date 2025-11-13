@@ -309,8 +309,20 @@ with open(logo_path, "rb") as f:
     </div>
     """, unsafe_allow_html=True)
 
-st.title("DOCX ANONYMIZER")
-st.caption("PROFESSIONAL DOCUMENT ANONYMIZATION SYSTEM")
+# Header with version indicator
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.title("DOCX ANONYMIZER")
+    st.caption("PROFESSIONAL DOCUMENT ANONYMIZATION SYSTEM")
+with col2:
+    st.markdown("""
+    <div style='text-align: right; padding-top: 1rem;'>
+        <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
+            v1.1 - Matador Fix<br>
+            <span style='font-size: 0.65rem;'>Updated: Nov 12, 2025</span>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Sidebar configuration
 with st.sidebar:
