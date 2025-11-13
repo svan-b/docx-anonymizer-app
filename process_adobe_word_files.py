@@ -529,6 +529,69 @@ def anonymize_docx(docx_path, alias_map, sorted_keys):
                     count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
                     total_replacements += count
 
+    # CRITICAL FIX: Anonymize textboxes and shapes in main document body
+    # This was missing and caused "Matador" to appear in PDFs but not Word
+    if hasattr(doc, '_element'):
+        try:
+            # Find all text elements inside textboxes in the main body
+            textbox_texts = doc._element.xpath('.//w:txbxContent//w:t')
+            for text_elem in textbox_texts:
+                if text_elem.text:
+                    text_elem.text, count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+
+            # Also handle VML textboxes (legacy format)
+            vml_textbox_texts = doc._element.xpath('.//v:textbox//w:t')
+            for text_elem in vml_textbox_texts:
+                if text_elem.text:
+                    text_elem.text, count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+        except Exception:
+            pass  # Skip if xpath fails
+
+    # Anonymize footnotes and endnotes
+    try:
+        if hasattr(doc, 'part') and hasattr(doc.part, 'package'):
+            package = doc.part.package
+
+            # Process footnotes
+            try:
+                footnotes_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes')
+                if hasattr(footnotes_part, '_element'):
+                    footnote_texts = footnotes_part._element.xpath('.//w:t')
+                    for text_elem in footnote_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No footnotes or error accessing them
+
+            # Process endnotes
+            try:
+                endnotes_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes')
+                if hasattr(endnotes_part, '_element'):
+                    endnote_texts = endnotes_part._element.xpath('.//w:t')
+                    for text_elem in endnote_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No endnotes or error accessing them
+
+            # Process comments
+            try:
+                comments_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments')
+                if hasattr(comments_part, '_element'):
+                    comment_texts = comments_part._element.xpath('.//w:t')
+                    for text_elem in comment_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No comments or error accessing them
+    except Exception:
+        pass  # Skip if parts not accessible
+
     # Anonymize headers and footers
     for section in doc.sections:
         for header in [section.header, section.first_page_header, section.even_page_header]:
