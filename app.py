@@ -794,25 +794,25 @@ if st.session_state.processing_complete:
         with download_cols[0]:
             if st.session_state.originals_zip_data:
                 st.download_button(
-                    label="📄 DOWNLOAD ORIGINAL FILES",
+                    label="📄 DOWNLOAD ORIGINAL FORMATS",
                     data=st.session_state.originals_zip_data,
                     file_name=f"anonymized_originals_{st.session_state.timestamp}.zip",
                     mime="application/zip",
                     width='stretch',
                     type="primary",
-                    help="Preserves format: Word→.docx, Excel→.xlsx, PowerPoint→.pptx"
+                    help="Anonymized files in original formats (.docx, .xlsx, .pptx)"
                 )
 
         with download_cols[1]:
             if st.session_state.pdf_zip_data:
                 st.download_button(
-                    label="📑 DOWNLOAD PDF FILES",
+                    label="📑 DOWNLOAD AS PDF",
                     data=st.session_state.pdf_zip_data,
                     file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
                     mime="application/zip",
                     width='stretch',
                     type="primary",
-                    help="All files converted to PDF"
+                    help="Anonymized files converted to PDF"
                 )
 
     # Summary stats in a compact row
