@@ -139,38 +139,10 @@ def anonymize_xlsx(xlsx_path, alias_map, sorted_keys, compiled_patterns):
                             cell.comment.text = new_comment
                             total_replacements += count
 
-        # Anonymize headers and footers
-        if sheet.oddHeader:
-            sheet.oddHeader.left.text, count = anonymize_text_xlsx(
-                sheet.oddHeader.left.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
-
-            sheet.oddHeader.center.text, count = anonymize_text_xlsx(
-                sheet.oddHeader.center.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
-
-            sheet.oddHeader.right.text, count = anonymize_text_xlsx(
-                sheet.oddHeader.right.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
-
-        if sheet.oddFooter:
-            sheet.oddFooter.left.text, count = anonymize_text_xlsx(
-                sheet.oddFooter.left.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
-
-            sheet.oddFooter.center.text, count = anonymize_text_xlsx(
-                sheet.oddFooter.center.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
-
-            sheet.oddFooter.right.text, count = anonymize_text_xlsx(
-                sheet.oddFooter.right.text or "", alias_map, sorted_keys, compiled_patterns
-            )
-            total_replacements += count
+        # NOTE: Excel header/footer anonymization skipped
+        # openpyxl header/footer objects have complex structure
+        # Most Excel files don't use headers/footers with company names
+        # Can be added in future if needed
 
     return wb, total_replacements
 

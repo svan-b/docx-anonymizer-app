@@ -427,7 +427,7 @@ with col2:
         "EXECUTE ANONYMIZATION",
         type="primary",
         disabled=(not docx_files or not excel_file),
-        use_container_width=True
+        width='stretch'
     )
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -544,6 +544,11 @@ if execute_btn:
                 files_to_process.append((uploaded_file.name, file_path, 'excel', '.xlsx'))
             else:
                 st.warning(f"Unsupported file type: {uploaded_file.name}")
+
+        # Check if any files were successfully prepared
+        if not files_to_process:
+            st.error("❌ No files could be processed. Check file formats and conversion errors above.")
+            st.stop()
 
         # Load mappings and precompile patterns
         with st.spinner("Loading anonymization mappings..."):
@@ -793,7 +798,7 @@ if st.session_state.processing_complete:
                     data=st.session_state.originals_zip_data,
                     file_name=f"anonymized_originals_{st.session_state.timestamp}.zip",
                     mime="application/zip",
-                    use_container_width=True,
+                    width='stretch',
                     type="primary",
                     help="Preserves format: Word→.docx, Excel→.xlsx, PowerPoint→.pptx"
                 )
@@ -805,7 +810,7 @@ if st.session_state.processing_complete:
                     data=st.session_state.pdf_zip_data,
                     file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
                     mime="application/zip",
-                    use_container_width=True,
+                    width='stretch',
                     type="primary",
                     help="All files converted to PDF"
                 )
@@ -829,7 +834,7 @@ if st.session_state.processing_complete:
         st.metric("PDF SUCCESS", f"{pdf_success}/{st.session_state.total_files}", delta=None)
 
     with stats_cols[4]:
-        if st.button("🔄 NEW BATCH", use_container_width=True):
+        if st.button("🔄 NEW BATCH", width='stretch'):
             st.session_state.processing_complete = False
             st.session_state.results = []
             st.session_state.originals_zip_data = None
@@ -850,7 +855,7 @@ if st.session_state.processing_complete:
         if st.session_state.results:
             st.dataframe(
                 st.session_state.results,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 height=400
             )
