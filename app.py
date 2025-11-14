@@ -17,8 +17,11 @@ from datetime import datetime
 from process_adobe_word_files import (
     load_aliases_from_excel,
     categorize_and_sort_aliases,
-    process_single_docx
+    process_single_docx,
+    precompile_patterns
 )
+from process_powerpoint import process_single_pptx
+from process_excel import process_single_xlsx
 import logging
 
 # Page configuration
@@ -287,7 +290,7 @@ for key, default in [
     ('total_files', 0),
     ('total_replacements', 0),
     ('total_images', 0),
-    ('docx_zip_data', None),
+    ('originals_zip_data', None),
     ('pdf_zip_data', None),
     ('timestamp', None),
     ('processing_logs', [])  # Store detailed logs
@@ -318,7 +321,7 @@ with col2:
     st.markdown("""
     <div style='text-align: right; padding-top: 1rem;'>
         <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
-            v1.3 - Blank After Support<br>
+            v1.4 - Multi-Format Support<br>
             <span style='font-size: 0.65rem;'>Updated: Nov 14, 2025</span>
         </p>
     </div>
@@ -351,10 +354,10 @@ with st.sidebar:
     st.divider()
     st.markdown("### TECHNICAL SPECS")
     st.caption("""
-    **Format Support:** DOCX, DOC
-    **Output:** DOCX + PDF
+    **Format Support:** Word, Excel, PowerPoint
+    **Output:** Original Format + PDF
     **Max File Size:** 200MB
-    **Batch Processing:** Enabled
+    **Batch Processing:** Mixed formats supported
     **PDF Engine:** LibreOffice
     """)
 
@@ -367,11 +370,11 @@ col1, col2 = st.columns([3, 2])
 with col1:
     st.markdown("#### SOURCE DOCUMENTS")
     docx_files = st.file_uploader(
-        "Upload DOCX or DOC files",
-        type=['docx', 'doc'],
+        "Upload Documents (Word, Excel, PowerPoint)",
+        type=['docx', 'doc', 'pptx', 'ppt', 'xlsx', 'xls'],
         accept_multiple_files=True,
         key="docx_upload",
-        help="Supports batch processing of multiple files"
+        help="Supports batch processing: Word, PowerPoint, Excel"
     )
     if docx_files:
         st.session_state.docx_files_uploaded = docx_files
@@ -432,7 +435,7 @@ if execute_btn:
     # Reset state
     st.session_state.processing_complete = False
     st.session_state.results = []
-    st.session_state.docx_zip_data = None
+    st.session_state.originals_zip_data = None
     st.session_state.pdf_zip_data = None
 
     # Validate LibreOffice
@@ -456,11 +459,11 @@ if execute_btn:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         input_dir = temp_path / "input"
-        docx_output_dir = temp_path / "docx_output"
+        originals_output_dir = temp_path / "originals_output"  # Preserves format
         pdf_output_dir = temp_path / "pdf_output"
 
         input_dir.mkdir()
-        docx_output_dir.mkdir()
+        originals_output_dir.mkdir()
         pdf_output_dir.mkdir()
 
         # Save Excel requirements
@@ -468,16 +471,20 @@ if execute_btn:
         with open(excel_path, 'wb') as f:
             f.write(excel_file.getbuffer())
 
-        # Save and convert input files
+        # Save input files and determine type
         files_to_process = []
-        for docx_file in docx_files:
-            file_path = input_dir / docx_file.name
+        for uploaded_file in docx_files:
+            file_path = input_dir / uploaded_file.name
             with open(file_path, 'wb') as f:
-                f.write(docx_file.getbuffer())
+                f.write(uploaded_file.getbuffer())
 
-            # Convert .doc to .docx if needed
-            if docx_file.name.lower().endswith('.doc') and not docx_file.name.lower().endswith('.docx'):
-                with st.spinner(f"Converting {docx_file.name} to DOCX..."):
+            # Detect file type by extension
+            file_ext = file_path.suffix.lower()
+
+            # Convert legacy formats to modern ones
+            if file_ext == '.doc':
+                # Convert .doc to .docx
+                with st.spinner(f"Converting {uploaded_file.name} to DOCX..."):
                     try:
                         cmd = [
                             'soffice', '--headless', '--norestore', '--nologo',
@@ -487,19 +494,63 @@ if execute_btn:
                         subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                         converted_path = file_path.with_suffix('.docx')
                         if converted_path.exists():
-                            files_to_process.append((docx_file.name, converted_path))
+                            files_to_process.append((uploaded_file.name, converted_path, 'word', '.docx'))
                         else:
-                            st.error(f"Conversion failed: {docx_file.name}")
+                            st.error(f"Conversion failed: {uploaded_file.name}")
                     except Exception as e:
                         st.error(f"Conversion error: {e}")
-            else:
-                files_to_process.append((docx_file.name, file_path))
 
-        # Load mappings
+            elif file_ext == '.ppt':
+                # Convert .ppt to .pptx
+                with st.spinner(f"Converting {uploaded_file.name} to PPTX..."):
+                    try:
+                        cmd = [
+                            'soffice', '--headless', '--norestore', '--nologo',
+                            '--nofirststartwizard', '--convert-to', 'pptx',
+                            '--outdir', str(input_dir), str(file_path)
+                        ]
+                        subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                        converted_path = file_path.with_suffix('.pptx')
+                        if converted_path.exists():
+                            files_to_process.append((uploaded_file.name, converted_path, 'powerpoint', '.pptx'))
+                        else:
+                            st.error(f"Conversion failed: {uploaded_file.name}")
+                    except Exception as e:
+                        st.error(f"Conversion error: {e}")
+
+            elif file_ext == '.xls':
+                # Convert .xls to .xlsx (LibreOffice can do this)
+                with st.spinner(f"Converting {uploaded_file.name} to XLSX..."):
+                    try:
+                        cmd = [
+                            'soffice', '--headless', '--norestore', '--nologo',
+                            '--nofirststartwizard', '--convert-to', 'xlsx',
+                            '--outdir', str(input_dir), str(file_path)
+                        ]
+                        subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                        converted_path = file_path.with_suffix('.xlsx')
+                        if converted_path.exists():
+                            files_to_process.append((uploaded_file.name, converted_path, 'excel', '.xlsx'))
+                        else:
+                            st.error(f"Conversion failed: {uploaded_file.name}")
+                    except Exception as e:
+                        st.error(f"Conversion error: {e}")
+
+            elif file_ext == '.docx':
+                files_to_process.append((uploaded_file.name, file_path, 'word', '.docx'))
+            elif file_ext == '.pptx':
+                files_to_process.append((uploaded_file.name, file_path, 'powerpoint', '.pptx'))
+            elif file_ext == '.xlsx':
+                files_to_process.append((uploaded_file.name, file_path, 'excel', '.xlsx'))
+            else:
+                st.warning(f"Unsupported file type: {uploaded_file.name}")
+
+        # Load mappings and precompile patterns
         with st.spinner("Loading anonymization mappings..."):
             try:
                 alias_map = load_aliases_from_excel(excel_path)
                 sorted_keys = categorize_and_sort_aliases(alias_map)
+                compiled_patterns = precompile_patterns(alias_map)  # Precompile for performance
                 st.success(f"✓ {len(alias_map)} mappings loaded")
             except Exception as e:
                 st.error(f"Mapping error: {e}")
@@ -542,43 +593,63 @@ if execute_btn:
         logger = logging.getLogger(__name__)
 
         # Process files with compact updates
-        for i, (original_name, input_path) in enumerate(files_to_process):
+        for i, (original_name, input_path, file_type, output_ext) in enumerate(files_to_process):
             # Update status line
             status_text.text(f"Processing: {original_name}")
 
-            docx_output_path = docx_output_dir / Path(original_name).with_suffix('.docx').name
+            # Output path preserves original format
+            output_filename = Path(original_name).stem + output_ext
+            original_output_path = originals_output_dir / output_filename
 
             log_entry = {
                 'filename': original_name,
+                'file_type': file_type,
                 'status': 'processing',
                 'details': []
             }
 
             try:
-                # Anonymize DOCX
-                replacements, images = process_single_docx(
-                    input_path, docx_output_path, alias_map, sorted_keys, logger,
-                    remove_images=remove_images,
-                    clear_headers_footers_flag=clear_headers_footers
-                )
+                # Route to appropriate processor based on file type
+                if file_type == 'word':
+                    replacements, images = process_single_docx(
+                        input_path, original_output_path, alias_map, sorted_keys, logger,
+                        remove_images=remove_images,
+                        clear_headers_footers_flag=clear_headers_footers
+                    )
+                    log_entry['details'].append(f"Word: {replacements} replacements, {images} images removed")
+
+                elif file_type == 'powerpoint':
+                    replacements, images = process_single_pptx(
+                        input_path, original_output_path, alias_map, sorted_keys,
+                        compiled_patterns, logger, remove_images=remove_images
+                    )
+                    log_entry['details'].append(f"PowerPoint: {replacements} replacements, {images} images removed")
+
+                elif file_type == 'excel':
+                    replacements, images = process_single_xlsx(
+                        input_path, original_output_path, alias_map, sorted_keys,
+                        compiled_patterns, logger, remove_images=False
+                    )
+                    log_entry['details'].append(f"Excel: {replacements} replacements")
+
+                else:
+                    raise ValueError(f"Unsupported file type: {file_type}")
 
                 total_replacements += replacements
                 total_images += images
 
-                log_entry['details'].append(f"DOCX: {replacements} replacements, {images} images removed")
-
-                # Convert to PDF
+                # Convert to PDF (works for all file types via LibreOffice)
                 pdf_output_path = pdf_output_dir / Path(original_name).with_suffix('.pdf').name
 
                 try:
                     cmd = [
                         'soffice', '--headless', '--norestore', '--nologo',
                         '--nofirststartwizard', '--convert-to', 'pdf',
-                        '--outdir', str(pdf_output_dir), str(docx_output_path)
+                        '--outdir', str(pdf_output_dir), str(original_output_path)
                     ]
                     subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
-                    expected_output = pdf_output_dir / f"{docx_output_path.stem}.pdf"
+                    expected_output = pdf_output_dir / f"{original_output_path.stem}.pdf"
 
                     if expected_output.exists():
                         if expected_output != pdf_output_path:
@@ -590,6 +661,7 @@ if execute_btn:
 
                         results.append({
                             'filename': original_name,
+                            'file_type': file_type.capitalize(),
                             'replacements': replacements,
                             'images': images,
                             'pdf_status': '✓ Success',
@@ -600,6 +672,7 @@ if execute_btn:
                         log_entry['status'] = 'warning'
                         results.append({
                             'filename': original_name,
+                            'file_type': file_type.capitalize(),
                             'replacements': replacements,
                             'images': images,
                             'pdf_status': '✗ Failed',
@@ -611,6 +684,7 @@ if execute_btn:
                     log_entry['status'] = 'warning'
                     results.append({
                         'filename': original_name,
+                        'file_type': file_type.capitalize(),
                         'replacements': replacements,
                         'images': images,
                         'pdf_status': '⚠ Timeout',
@@ -621,6 +695,7 @@ if execute_btn:
                     log_entry['status'] = 'warning'
                     results.append({
                         'filename': original_name,
+                        'file_type': file_type.capitalize(),
                         'replacements': replacements,
                         'images': images,
                         'pdf_status': '✗ Error',
@@ -628,13 +703,14 @@ if execute_btn:
                     })
 
             except Exception as e:
-                log_entry['details'].append(f"DOCX: Error - {str(e)[:100]}")
+                log_entry['details'].append(f"Processing Error: {str(e)[:100]}")
                 log_entry['status'] = 'error'
                 results.append({
                     'filename': original_name,
+                    'file_type': file_type.capitalize(),
                     'replacements': 0,
                     'images': 0,
-                    'pdf_status': '✗ DOCX Error',
+                    'pdf_status': f'✗ {file_type.capitalize()} Error',
                     'pdf_size_kb': 0
                 })
 
@@ -664,14 +740,18 @@ if execute_btn:
         # Create ZIP archives
         timestamp = st.session_state.timestamp
 
-        docx_zip_path = temp_path / f"anonymized_docx_{timestamp}.zip"
-        with zipfile.ZipFile(docx_zip_path, 'w') as zipf:
-            for docx_file in docx_output_dir.glob('*.docx'):
-                zipf.write(docx_file, docx_file.name)
+        # ZIP 1: Original formats (preserves .docx, .pptx, .xlsx)
+        originals_zip_path = temp_path / f"anonymized_originals_{timestamp}.zip"
+        with zipfile.ZipFile(originals_zip_path, 'w') as zipf:
+            # Add all files from originals_output_dir (mixed formats)
+            for file in originals_output_dir.glob('*'):
+                if file.is_file():
+                    zipf.write(file, file.name)
 
-        with open(docx_zip_path, 'rb') as f:
-            st.session_state.docx_zip_data = f.read()
+        with open(originals_zip_path, 'rb') as f:
+            st.session_state.originals_zip_data = f.read()
 
+        # ZIP 2: PDFs (all files converted to PDF)
         pdf_zip_path = temp_path / f"anonymized_pdf_{timestamp}.zip"
         with zipfile.ZipFile(pdf_zip_path, 'w') as zipf:
             for pdf_file in pdf_output_dir.glob('*.pdf'):
@@ -707,14 +787,15 @@ if st.session_state.processing_complete:
         download_cols = st.columns(2)
 
         with download_cols[0]:
-            if st.session_state.docx_zip_data:
+            if st.session_state.originals_zip_data:
                 st.download_button(
-                    label="📄 DOWNLOAD DOCX FILES",
-                    data=st.session_state.docx_zip_data,
-                    file_name=f"anonymized_docx_{st.session_state.timestamp}.zip",
+                    label="📄 DOWNLOAD ORIGINAL FILES",
+                    data=st.session_state.originals_zip_data,
+                    file_name=f"anonymized_originals_{st.session_state.timestamp}.zip",
                     mime="application/zip",
                     use_container_width=True,
-                    type="primary"
+                    type="primary",
+                    help="Preserves format: Word→.docx, Excel→.xlsx, PowerPoint→.pptx"
                 )
 
         with download_cols[1]:
@@ -725,7 +806,8 @@ if st.session_state.processing_complete:
                     file_name=f"anonymized_pdf_{st.session_state.timestamp}.zip",
                     mime="application/zip",
                     use_container_width=True,
-                    type="primary"
+                    type="primary",
+                    help="All files converted to PDF"
                 )
 
     # Summary stats in a compact row
@@ -750,7 +832,7 @@ if st.session_state.processing_complete:
         if st.button("🔄 NEW BATCH", use_container_width=True):
             st.session_state.processing_complete = False
             st.session_state.results = []
-            st.session_state.docx_zip_data = None
+            st.session_state.originals_zip_data = None
             st.session_state.pdf_zip_data = None
             st.session_state.processing_logs = []
             st.rerun()
