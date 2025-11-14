@@ -233,11 +233,16 @@ def load_aliases_from_excel(excel_path):
         original = row[original_col].value
         replacement = row[replacement_col].value
 
-        if original and replacement:
+        # CRITICAL: Allow blank "After" values for deletion/removal
+        # If After is blank, we replace with empty string (removes the text)
+        if original is not None:
             original = str(original).strip()
-            replacement = str(replacement).strip()
-            if original and replacement:
-                alias_map[original] = replacement
+            if original:  # Only check original is not empty
+                # Handle None or blank replacement as empty string (deletion)
+                if replacement is None or str(replacement).strip() == "":
+                    alias_map[original] = ""
+                else:
+                    alias_map[original] = str(replacement).strip()
 
     # Generate reverse names for Form 4 (LastName FirstName format)
     additional_mappings = {}
