@@ -509,10 +509,12 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
         relative_path = Path(str(relative_path).replace(relative_path.suffix, extension))
 
     # Determine output paths
-    output_path = output_dir / relative_path
+    # Preserve entire folder structure including root folder name
+    root_folder_name = input_dir.name
+    output_path = output_dir / root_folder_name / relative_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    pdf_path = pdf_output_dir / relative_path.with_suffix('.pdf')
+    pdf_path = pdf_output_dir / root_folder_name / relative_path.with_suffix('.pdf')
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -855,7 +857,7 @@ Examples:
     # Print banner
     print(f"""
 {Colors.BOLD}{Colors.CYAN}╔════════════════════════════════════════════════════════════╗
-║       FOLDER BATCH ANONYMIZATION SYSTEM v1.0           ║
+║       FOLDER BATCH ANONYMIZATION SYSTEM v1.1           ║
 ║       Production-Grade Document Processing             ║
 ╚════════════════════════════════════════════════════════════╝{Colors.ENDC}
 
