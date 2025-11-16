@@ -33,7 +33,7 @@ from process_adobe_word_files import (
     process_single_docx
 )
 from process_powerpoint import process_single_pptx
-from process_excel import process_single_xlsx
+from process_excel import process_single_xlsx, process_single_xls
 
 # ANSI color codes for terminal output
 class Colors:
@@ -70,6 +70,7 @@ class BatchStats:
         })
         self.replacement_frequency = defaultdict(int)  # Track which replacements used
         self.error_log = []  # Detailed error information
+        self.copied_files = []  # Track non-processable files copied as-is
 
     def add_file_result(self, file_path: Path, relative_path: Path, status: str,
                        replacements: int = 0, images_removed: int = 0,
@@ -133,9 +134,19 @@ class BatchStats:
         minutes, seconds = divmod(elapsed.total_seconds(), 60)
         return f"{int(minutes)}m {int(seconds)}s"
 
-    def get_summary(self) -> str:
+    def get_summary(self, include_pdf: bool = True) -> str:
         """Get formatted summary string"""
         success_rate = (self.files_succeeded / max(self.files_processed, 1)) * 100
+
+        # Build PDF conversion section conditionally
+        pdf_section = ""
+        if include_pdf:
+            pdf_section = f"""
+{Colors.BOLD}PDF Conversion:{Colors.ENDC}
+  {Colors.GREEN}✓ Succeeded:{Colors.ENDC}       {self.pdf_successes}
+  {Colors.RED}✗ Failed:{Colors.ENDC}          {self.pdf_failures}
+"""
+
         return f"""
 {Colors.BOLD}{Colors.CYAN}╔════════════════════════════════════════════════════════════╗
 ║              BATCH PROCESSING SUMMARY                      ║
@@ -148,12 +159,7 @@ class BatchStats:
 
 {Colors.BOLD}Anonymization:{Colors.ENDC}
   Replacements:       {self.total_replacements:,}
-  Images Removed:     {self.total_images_removed:,}
-
-{Colors.BOLD}PDF Conversion:{Colors.ENDC}
-  {Colors.GREEN}✓ Succeeded:{Colors.ENDC}       {self.pdf_successes}
-  {Colors.RED}✗ Failed:{Colors.ENDC}          {self.pdf_failures}
-
+  Images Removed:     {self.total_images_removed:,}{pdf_section}
 {Colors.BOLD}Performance:{Colors.ENDC}
   Success Rate:       {success_rate:.1f}%
   Total Time:         {self.get_elapsed_time()}
@@ -328,12 +334,12 @@ def prompt_for_image_removal(folder_info: Dict, auto_mode: Optional[bool] = None
     if type_str:
         print(f"{Colors.BOLD}Types:{Colors.ENDC} {type_str}")
 
-    # WARNING: Show non-processable files if present
+    # INFO: Show non-processable files if present
     if folder_info['has_warnings']:
-        print(f"\n{Colors.YELLOW}{Colors.BOLD}⚠ WARNING: This folder contains non-processable files:{Colors.ENDC}")
+        print(f"\n{Colors.CYAN}{Colors.BOLD}ℹ INFO: This folder contains non-processable files:{Colors.ENDC}")
         for file_type, count in folder_info['non_processable_counts'].items():
-            print(f"  {Colors.YELLOW}• {file_type}: {count} file(s) (will be SKIPPED){Colors.ENDC}")
-        print(f"{Colors.YELLOW}  Total non-processable: {folder_info['non_processable_total']}{Colors.ENDC}")
+            print(f"  {Colors.CYAN}• {file_type}: {count} file(s) (will be COPIED as-is){Colors.ENDC}")
+        print(f"{Colors.CYAN}  Total non-processable: {folder_info['non_processable_total']}{Colors.ENDC}")
 
     # Show sample filenames
     if folder_info['sample_files']:
@@ -409,9 +415,12 @@ def convert_legacy_format(file_path: Path, output_dir: Path, logger: logging.Log
             str(file_path)
         ]
 
+        # Increase timeout for Excel files (can be large/complex)
+        timeout_seconds = 600 if extension == '.xls' else 300
+
         result = subprocess.run(
             cmd,
-            timeout=300,  # 5 minute timeout
+            timeout=timeout_seconds,
             capture_output=True,
             text=True
         )
@@ -420,11 +429,22 @@ def convert_legacy_format(file_path: Path, output_dir: Path, logger: logging.Log
             logger.info(f"Successfully converted to {output_file.name}")
             return output_file
         else:
-            logger.error(f"Conversion failed: {result.stderr}")
+            # Log detailed error information
+            error_details = f"Return code: {result.returncode}"
+            if result.stderr:
+                error_details += f"\nStderr: {result.stderr.strip()}"
+            if result.stdout:
+                error_details += f"\nStdout: {result.stdout.strip()}"
+            logger.error(f"Conversion failed for {file_path.name}: {error_details}")
+
+            # For .xls files, warn that they cannot be processed
+            if extension == '.xls':
+                logger.warning(f"Legacy .xls file cannot be converted. File will be copied as-is to output (not anonymized): {file_path.name}")
+
             return None
 
     except subprocess.TimeoutExpired:
-        logger.error(f"Conversion timeout for {file_path.name}")
+        logger.error(f"Conversion timeout ({timeout_seconds}s) for {file_path.name}")
         return None
     except Exception as e:
         logger.error(f"Conversion error for {file_path.name}: {str(e)}")
@@ -479,7 +499,7 @@ def convert_to_pdf(file_path: Path, pdf_output_dir: Path, logger: logging.Logger
 def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_dir: Path,
                 alias_map: Dict, sorted_keys: List, compiled_patterns: Dict,
                 logger: logging.Logger, remove_images: bool = True,
-                generate_pdf: bool = True) -> Dict:
+                generate_pdf: bool = True, timestamp_suffix: str = "") -> Dict:
     """
     Process a single file (anonymize and optionally convert to PDF)
 
@@ -492,15 +512,17 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
     # Determine file type
     extension = file_path.suffix.lower()
 
-    # Handle legacy formats first
-    if extension in ['.doc', '.xls', '.ppt']:
+    # Handle legacy .doc and .ppt formats via LibreOffice conversion
+    # Note: .xls files are handled directly with pandas (see routing below)
+    if extension in ['.doc', '.ppt']:
         converted_path = convert_legacy_format(file_path, output_dir, logger)
         if converted_path is None:
+            # Conversion failed - file will be copied as-is (not anonymized)
             return {
-                'status': 'failed',
+                'status': 'skipped',
                 'replacements': 0,
                 'images_removed': 0,
-                'error': f"Failed to convert legacy format {extension}",
+                'error': f"Legacy {extension} file cannot be converted - will be copied as-is (not anonymized)",
                 'processing_time': time.time() - start_time
             }
         file_path = converted_path
@@ -509,8 +531,8 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
         relative_path = Path(str(relative_path).replace(relative_path.suffix, extension))
 
     # Determine output paths
-    # Preserve entire folder structure including root folder name
-    root_folder_name = input_dir.name
+    # Preserve entire folder structure including root folder name with optional timestamp
+    root_folder_name = f"{input_dir.name}{timestamp_suffix}"
     output_path = output_dir / root_folder_name / relative_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -544,6 +566,16 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
                 remove_images=False  # Excel doesn't support image removal
             )
 
+        elif extension == '.xls':
+            logger.info(f"Processing XLS (legacy): {relative_path}")
+            # For .xls files, output as .xlsx (converted format)
+            output_path_xlsx = output_path.with_suffix('.xlsx')
+            replacements, images_removed = process_single_xls(
+                str(file_path), str(output_path_xlsx),
+                alias_map, sorted_keys, compiled_patterns, logger,
+                remove_images=False  # Excel doesn't support image removal
+            )
+
         else:
             return {
                 'status': 'skipped',
@@ -554,22 +586,25 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
             }
 
         # PDF conversion (optional)
-        pdf_success = False
-        if generate_pdf and output_path.exists():
-            pdf_success = convert_to_pdf(output_path, pdf_path.parent, logger)
-
-        processing_time = time.time() - start_time
-        logger.info(f"Completed {relative_path}: {replacements} replacements, "
-                   f"{images_removed} images removed in {processing_time:.1f}s")
-
-        return {
+        result_dict = {
             'status': 'success',
             'replacements': replacements,
             'images_removed': images_removed,
-            'pdf_success': pdf_success,
             'error': '',
-            'processing_time': processing_time
+            'processing_time': 0  # Will be set below
         }
+
+        # Only attempt PDF conversion and track result if PDF generation is enabled
+        if generate_pdf and output_path.exists():
+            pdf_success = convert_to_pdf(output_path, pdf_path.parent, logger)
+            result_dict['pdf_success'] = pdf_success
+
+        processing_time = time.time() - start_time
+        result_dict['processing_time'] = processing_time
+        logger.info(f"Completed {relative_path}: {replacements} replacements, "
+                   f"{images_removed} images removed in {processing_time:.1f}s")
+
+        return result_dict
 
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"
@@ -578,10 +613,100 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
             'status': 'failed',
             'replacements': 0,
             'images_removed': 0,
-            'pdf_success': False,
             'error': error_msg,
             'processing_time': time.time() - start_time
         }
+
+
+def copy_non_processable_files(input_dir: Path, output_dir: Path, timestamp_suffix: str, logger: logging.Logger, stats: 'BatchStats') -> int:
+    """
+    Copy non-processable files (PDFs, images, etc.) to output directory
+    to preserve complete folder structure.
+
+    Args:
+        stats: BatchStats object to track copied files
+
+    Returns:
+        Number of files copied
+    """
+    logger.info("Copying non-processable files to output...")
+
+    # Extensions that should be copied as-is
+    copy_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.txt',
+                      '.csv', '.json', '.xml', '.html', '.htm', '.zip', '.tar', '.gz'}
+
+    # Tracker files to skip
+    skip_patterns = ['tracker', 'anon tracker']
+
+    files_copied = 0
+    root_folder_name = f"{input_dir.name}{timestamp_suffix}"
+
+    # Find all files in input directory
+    for file_path in input_dir.rglob('*'):
+        if not file_path.is_file():
+            continue
+
+        # Skip tracker files
+        if any(pattern in file_path.name.lower() for pattern in skip_patterns):
+            continue
+
+        # Check if file should be copied
+        if file_path.suffix.lower() in copy_extensions:
+            # Calculate relative path and output path
+            relative_path = file_path.relative_to(input_dir)
+            output_path = output_dir / root_folder_name / relative_path
+
+            # Create parent directories if needed
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy file
+            try:
+                shutil.copy2(file_path, output_path)
+                files_copied += 1
+                logger.debug(f"Copied: {relative_path}")
+
+                # Track copied file
+                stats.copied_files.append({
+                    'original_path': str(relative_path),
+                    'output_path': str(output_dir / root_folder_name / relative_path),
+                    'file_type': file_path.suffix.lower(),
+                    'filename': file_path.name
+                })
+            except Exception as e:
+                logger.warning(f"Failed to copy {relative_path}: {str(e)}")
+
+    logger.info(f"Copied {files_copied} non-processable files")
+    return files_copied
+
+
+def preserve_empty_folders(input_dir: Path, output_dir: Path, timestamp_suffix: str, logger: logging.Logger):
+    """
+    Create empty directories in output to match input structure.
+    """
+    logger.info("Preserving empty folder structure...")
+
+    root_folder_name = f"{input_dir.name}{timestamp_suffix}"
+    folders_created = 0
+
+    # Find all directories in input
+    for dir_path in input_dir.rglob('*'):
+        if not dir_path.is_dir():
+            continue
+
+        # Calculate relative path and output path
+        try:
+            relative_path = dir_path.relative_to(input_dir)
+            output_path = output_dir / root_folder_name / relative_path
+
+            # Create directory if it doesn't exist
+            if not output_path.exists():
+                output_path.mkdir(parents=True, exist_ok=True)
+                folders_created += 1
+                logger.debug(f"Created empty folder: {relative_path}")
+        except Exception as e:
+            logger.warning(f"Failed to create directory {dir_path}: {str(e)}")
+
+    logger.info(f"Created {folders_created} empty folders")
 
 
 def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[Path]]:
@@ -633,8 +758,8 @@ def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[P
     return folder_files
 
 
-def generate_excel_report(stats: BatchStats, report_path: Path, logger: logging.Logger):
-    """Generate comprehensive Excel report"""
+def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict, logger: logging.Logger):
+    """Generate comprehensive Excel report with replacement and copied files details"""
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, Alignment, PatternFill
@@ -773,6 +898,54 @@ def generate_excel_report(stats: BatchStats, report_path: Path, logger: logging.
             ws_errors.column_dimensions['B'].width = 50
             ws_errors.column_dimensions['C'].width = 60
 
+        # Sheet 5: Anonymization Mappings
+        ws_mappings = wb.create_sheet("Anonymization Mappings")
+        mapping_headers = ['Original Text', 'Replacement Text', 'Action Type']
+        ws_mappings.append(mapping_headers)
+
+        # Style headers
+        for col_num, header in enumerate(mapping_headers, 1):
+            cell = ws_mappings.cell(1, col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center')
+
+        # Add mapping data
+        for original, replacement in sorted(alias_map.items()):
+            action_type = "DELETION (blank)" if replacement == "" else "REPLACEMENT"
+            ws_mappings.append([original, replacement if replacement != "" else "[DELETED]", action_type])
+
+        ws_mappings.column_dimensions['A'].width = 40
+        ws_mappings.column_dimensions['B'].width = 40
+        ws_mappings.column_dimensions['C'].width = 20
+
+        # Sheet 6: Copied Files (Non-Processable)
+        if stats.copied_files:
+            ws_copied = wb.create_sheet("Copied Files")
+            copied_headers = ['Original Path', 'Output Location', 'File Type', 'Filename']
+            ws_copied.append(copied_headers)
+
+            # Style headers
+            for col_num, header in enumerate(copied_headers, 1):
+                cell = ws_copied.cell(1, col_num)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+
+            # Add copied file data
+            for file_info in stats.copied_files:
+                ws_copied.append([
+                    file_info['original_path'],
+                    file_info['output_path'],
+                    file_info['file_type'],
+                    file_info['filename']
+                ])
+
+            ws_copied.column_dimensions['A'].width = 50
+            ws_copied.column_dimensions['B'].width = 60
+            ws_copied.column_dimensions['C'].width = 15
+            ws_copied.column_dimensions['D'].width = 40
+
         # Save workbook
         wb.save(report_path)
         logger.info(f"Excel report generated successfully: {report_path}")
@@ -825,21 +998,16 @@ Examples:
     output_dir = Path(args.output).resolve()
     tracker_path = Path(args.tracker).resolve()
 
-    # Add timestamp to output directories if requested
-    if args.timestamp_output:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = output_dir.parent / f"{output_dir.name}_{timestamp}"
-
-        if args.pdf_output:
-            pdf_output_dir = Path(args.pdf_output).resolve()
-            pdf_output_dir = pdf_output_dir.parent / f"{pdf_output_dir.name}_{timestamp}"
-        else:
-            pdf_output_dir = Path(__file__).parent / f'pdf_output_{timestamp}'
+    # Setup PDF output directory
+    if args.pdf_output:
+        pdf_output_dir = Path(args.pdf_output).resolve()
     else:
-        if args.pdf_output:
-            pdf_output_dir = Path(args.pdf_output).resolve()
-        else:
-            pdf_output_dir = Path(__file__).parent / 'pdf_output'
+        pdf_output_dir = Path(__file__).parent / 'pdf_output'
+
+    # Generate timestamp for folder naming if requested
+    timestamp_suffix = ""
+    if args.timestamp_output:
+        timestamp_suffix = f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     # Validate inputs
     if not input_dir.exists():
@@ -857,7 +1025,7 @@ Examples:
     # Print banner
     print(f"""
 {Colors.BOLD}{Colors.CYAN}╔════════════════════════════════════════════════════════════╗
-║       FOLDER BATCH ANONYMIZATION SYSTEM v1.1           ║
+║       FOLDER BATCH ANONYMIZATION SYSTEM v2.0           ║
 ║       Production-Grade Document Processing             ║
 ╚════════════════════════════════════════════════════════════╝{Colors.ENDC}
 
@@ -905,15 +1073,15 @@ Examples:
             if type_str:
                 print(f"  Types: {type_str}")
 
-            # Show warnings for non-processable files
+            # Show info for non-processable files
             if folder_info['has_warnings']:
                 non_proc_str = " | ".join([f"{k}: {v}" for k, v in folder_info['non_processable_counts'].items()])
-                print(f"  {Colors.YELLOW}⚠ Non-processable: {non_proc_str} (will be SKIPPED){Colors.ENDC}")
+                print(f"  {Colors.CYAN}ℹ Non-processable: {non_proc_str} (will be COPIED as-is){Colors.ENDC}")
                 total_warnings += folder_info['non_processable_total']
 
         print(f"\n{Colors.CYAN}Total files that would be processed: {total_files}{Colors.ENDC}")
         if total_warnings > 0:
-            print(f"{Colors.YELLOW}Total non-processable files that would be skipped: {total_warnings}{Colors.ENDC}")
+            print(f"{Colors.CYAN}Total non-processable files that would be copied as-is: {total_warnings}{Colors.ENDC}")
         print(f"{Colors.YELLOW}Run without --dry-run to process files{Colors.ENDC}")
         sys.exit(0)
 
@@ -959,7 +1127,8 @@ Examples:
                 file_path, input_dir, output_dir, pdf_output_dir,
                 alias_map, sorted_keys, compiled_patterns,
                 logger, remove_images=remove_images,
-                generate_pdf=not args.no_pdf
+                generate_pdf=not args.no_pdf,
+                timestamp_suffix=timestamp_suffix
             )
 
             # Update stats
@@ -976,8 +1145,14 @@ Examples:
             # Update progress display
             progress.update(str(relative_path), stats)
 
+    # Copy non-processable files and preserve empty folders
+    print(f"\n{Colors.BOLD}Finalizing folder structure...{Colors.ENDC}")
+    files_copied = copy_non_processable_files(input_dir, output_dir, timestamp_suffix, logger, stats)
+    preserve_empty_folders(input_dir, output_dir, timestamp_suffix, logger)
+    print(f"{Colors.GREEN}✓ Copied {files_copied} non-processable files and preserved folder structure{Colors.ENDC}")
+
     # Print final summary
-    print(f"\n\n{stats.get_summary()}")
+    print(f"\n\n{stats.get_summary(include_pdf=not args.no_pdf)}")
 
     # Generate Excel report
     report_dir = Path(__file__).parent / 'reports'
@@ -986,7 +1161,7 @@ Examples:
     report_path = report_dir / f"batch_report_{timestamp}.xlsx"
 
     print(f"\n{Colors.BOLD}Generating comprehensive report...{Colors.ENDC}")
-    generate_excel_report(stats, report_path, logger)
+    generate_excel_report(stats, report_path, alias_map, logger)
     print(f"{Colors.GREEN}✓ Report saved: {report_path}{Colors.ENDC}")
 
     # Cleanup temp conversion files
