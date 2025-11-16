@@ -660,9 +660,15 @@ def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger,
     Process a single DOCX file: anonymize + strip metadata + optional image removal + optional header/footer clearing.
 
     Args:
+        input_path: Path to input file (string or Path object)
+        output_path: Path to output file (string or Path object)
         remove_images: If True, removes all images from document
         clear_headers_footers_flag: If True, clears all header/footer content (for presentations with logos)
     """
+    # Convert to Path objects if strings (for backward compatibility)
+    input_path = Path(input_path) if isinstance(input_path, str) else input_path
+    output_path = Path(output_path) if isinstance(output_path, str) else output_path
+
     logger.info(f"Processing: {input_path.name}")
 
     try:

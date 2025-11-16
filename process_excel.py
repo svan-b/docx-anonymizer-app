@@ -152,8 +152,8 @@ def process_single_xlsx(input_path, output_path, alias_map, sorted_keys, compile
     Process a single Excel file: anonymize + strip metadata.
 
     Args:
-        input_path: Path to input .xlsx file
-        output_path: Path for output .xlsx file
+        input_path: Path to input .xlsx file (string or Path object)
+        output_path: Path for output .xlsx file (string or Path object)
         alias_map: Dictionary of original → replacement mappings
         sorted_keys: Sorted list of alias_map keys
         compiled_patterns: Pre-compiled regex patterns
@@ -164,6 +164,11 @@ def process_single_xlsx(input_path, output_path, alias_map, sorted_keys, compile
         (replacements, images_removed) tuple
         Note: images_removed always 0 for Excel (charts/images not processed)
     """
+    # Convert to Path objects if strings (for backward compatibility)
+    from pathlib import Path
+    input_path = Path(input_path) if isinstance(input_path, str) else input_path
+    output_path = Path(output_path) if isinstance(output_path, str) else output_path
+
     logger.info(f"Processing: {input_path.name}")
 
     try:

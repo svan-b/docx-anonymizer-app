@@ -170,8 +170,8 @@ def process_single_pptx(input_path, output_path, alias_map, sorted_keys, compile
     Process a single PowerPoint file: anonymize + strip metadata + optional image removal.
 
     Args:
-        input_path: Path to input .pptx file
-        output_path: Path for output .pptx file
+        input_path: Path to input .pptx file (string or Path object)
+        output_path: Path for output .pptx file (string or Path object)
         alias_map: Dictionary of original → replacement mappings
         sorted_keys: Sorted list of alias_map keys
         compiled_patterns: Pre-compiled regex patterns
@@ -181,6 +181,11 @@ def process_single_pptx(input_path, output_path, alias_map, sorted_keys, compile
     Returns:
         (replacements, images_removed) tuple
     """
+    # Convert to Path objects if strings (for backward compatibility)
+    from pathlib import Path
+    input_path = Path(input_path) if isinstance(input_path, str) else input_path
+    output_path = Path(output_path) if isinstance(output_path, str) else output_path
+
     logger.info(f"Processing: {input_path.name}")
 
     try:
