@@ -71,10 +71,12 @@ class BatchStats:
         self.replacement_frequency = defaultdict(int)  # Track which replacements used
         self.error_log = []  # Detailed error information
         self.copied_files = []  # Track non-processable files copied as-is
+        self.file_replacement_details = []  # Per-file detailed replacements (v2.1)
 
     def add_file_result(self, file_path: Path, relative_path: Path, status: str,
                        replacements: int = 0, images_removed: int = 0,
-                       processing_time: float = 0, error_msg: str = ""):
+                       processing_time: float = 0, error_msg: str = "",
+                       replacement_details: dict = None):
         """Record result for a single file"""
         folder_name = str(relative_path.parent) if relative_path.parent != Path('.') else 'root'
 
@@ -101,6 +103,15 @@ class BatchStats:
             'processing_time': processing_time,
             'error': error_msg
         })
+
+        # Store per-file replacement details (v2.1)
+        if replacement_details and status == 'success':
+            self.file_replacement_details.append({
+                'file_path': str(relative_path),
+                'directory': folder_name,
+                'filename': file_path.name,
+                'details': replacement_details  # {original: count, ...}
+            })
 
         # Update folder stats
         self.folder_stats[folder_name]['files'] += 1
@@ -540,40 +551,46 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
     pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Route to appropriate processor
+        # Route to appropriate processor (v2.1: with detailed tracking)
+        replacement_details = {}  # Will store per-document replacement details
+
         if extension == '.docx':
             logger.info(f"Processing DOCX: {relative_path}")
-            replacements, images_removed = process_single_docx(
+            replacements, images_removed, replacement_details = process_single_docx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, logger,
                 remove_images=remove_images,
-                clear_headers_footers_flag=False
+                clear_headers_footers_flag=False,
+                track_details=True
             )
 
         elif extension == '.pptx':
             logger.info(f"Processing PPTX: {relative_path}")
-            replacements, images_removed = process_single_pptx(
+            replacements, images_removed, replacement_details = process_single_pptx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, compiled_patterns, logger,
-                remove_images=remove_images
+                remove_images=remove_images,
+                track_details=True
             )
 
         elif extension == '.xlsx':
             logger.info(f"Processing XLSX: {relative_path}")
-            replacements, images_removed = process_single_xlsx(
+            replacements, images_removed, replacement_details = process_single_xlsx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, compiled_patterns, logger,
-                remove_images=False  # Excel doesn't support image removal
+                remove_images=False,  # Excel doesn't support image removal
+                track_details=True
             )
 
         elif extension == '.xls':
             logger.info(f"Processing XLS (legacy): {relative_path}")
             # For .xls files, output as .xlsx (converted format)
             output_path_xlsx = output_path.with_suffix('.xlsx')
-            replacements, images_removed = process_single_xls(
+            replacements, images_removed, replacement_details = process_single_xls(
                 str(file_path), str(output_path_xlsx),
                 alias_map, sorted_keys, compiled_patterns, logger,
-                remove_images=False  # Excel doesn't support image removal
+                remove_images=False,  # Excel doesn't support image removal
+                track_details=True
             )
 
         else:
@@ -591,7 +608,8 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
             'replacements': replacements,
             'images_removed': images_removed,
             'error': '',
-            'processing_time': 0  # Will be set below
+            'processing_time': 0,  # Will be set below
+            'replacement_details': replacement_details  # v2.1
         }
 
         # Only attempt PDF conversion and track result if PDF generation is enabled
@@ -946,6 +964,60 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
             ws_copied.column_dimensions['C'].width = 15
             ws_copied.column_dimensions['D'].width = 40
 
+        # Sheet 7: Detailed Replacements by Document (v2.1)
+        if stats.file_replacement_details:
+            ws_details = wb.create_sheet("Detailed Replacements")
+            details_headers = ["File Path", "Directory", "Document", "Original Text", "Replacement", "Occurrences", "Action Type"]
+            ws_details.append(details_headers)
+
+            # Style headers
+            for col_num, header in enumerate(details_headers, 1):
+                cell = ws_details.cell(1, col_num)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+
+            # Add detailed replacement data
+            rows = []
+            for file_info in stats.file_replacement_details:
+                file_path = file_info['file_path']
+                directory = file_info['directory']
+                filename = file_info['filename']
+                details = file_info['details']  # {original: count, ...}
+
+                # Create a row for each original → replacement
+                for original, count in sorted(details.items(), key=lambda x: x[1], reverse=True):
+                    # Look up replacement from alias_map
+                    replacement = alias_map.get(original, "[UNKNOWN]")
+                    action_type = "DELETION (blank)" if replacement == "" else "REPLACEMENT"
+                    display_replacement = "[DELETED]" if replacement == "" else replacement
+
+                    rows.append([
+                        file_path,
+                        directory,
+                        filename,
+                        original,
+                        display_replacement,
+                        count,
+                        action_type
+                    ])
+
+            # Sort rows by file path, then by occurrences (descending)
+            rows.sort(key=lambda x: (x[0], -x[5]))
+
+            # Add all rows
+            for row in rows:
+                ws_details.append(row)
+
+            # Set column widths
+            ws_details.column_dimensions['A'].width = 50  # File Path
+            ws_details.column_dimensions['B'].width = 25  # Directory
+            ws_details.column_dimensions['C'].width = 40  # Document
+            ws_details.column_dimensions['D'].width = 30  # Original Text
+            ws_details.column_dimensions['E'].width = 30  # Replacement
+            ws_details.column_dimensions['F'].width = 12  # Occurrences
+            ws_details.column_dimensions['G'].width = 20  # Action Type
+
         # Save workbook
         wb.save(report_path)
         logger.info(f"Excel report generated successfully: {report_path}")
@@ -1135,7 +1207,8 @@ Examples:
             stats.add_file_result(
                 file_path, relative_path, result['status'],
                 result['replacements'], result['images_removed'],
-                result['processing_time'], result.get('error', '')
+                result['processing_time'], result.get('error', ''),
+                replacement_details=result.get('replacement_details', {})
             )
 
             # Track PDF conversion
