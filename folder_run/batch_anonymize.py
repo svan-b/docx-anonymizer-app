@@ -12,6 +12,15 @@ Date: 2025-11-15
 
 import sys
 import os
+from pathlib import Path
+
+# CRITICAL FIX: Apply OOXML int() conversion patches BEFORE importing Document/Presentation
+# Fixes: ValueError: invalid literal for int() with base 10: '19.5'
+# Must be imported before process_adobe_word_files and process_powerpoint
+# See: ../fix_ooxml_int_conversion.py for details
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from fix_ooxml_int_conversion import apply_ooxml_patches
+apply_ooxml_patches()
 import argparse
 import logging
 from pathlib import Path

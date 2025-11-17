@@ -19,6 +19,12 @@ The script will:
 - Preserve directory structure
 """
 
+# CRITICAL FIX: Apply OOXML int() conversion patches BEFORE importing Document
+# Fixes: ValueError: invalid literal for int() with base 10: '19.5'
+# See: fix_ooxml_int_conversion.py for details
+from fix_ooxml_int_conversion import apply_ooxml_patches
+apply_ooxml_patches()
+
 import os
 import sys
 from pathlib import Path

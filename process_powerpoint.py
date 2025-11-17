@@ -4,6 +4,12 @@ PowerPoint Anonymization Module
 Handles .pptx and .ppt files for the DOCX Anonymizer app
 """
 
+# CRITICAL FIX: Apply OOXML int() conversion patches BEFORE importing Presentation
+# Fixes potential: ValueError: invalid literal for int() with base 10: '19.5'
+# See: fix_ooxml_int_conversion.py for details
+from fix_ooxml_int_conversion import apply_ooxml_patches
+apply_ooxml_patches()
+
 from pptx import Presentation
 from pathlib import Path
 import logging
