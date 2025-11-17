@@ -545,6 +545,8 @@ if execute_btn:
                 files_to_process.append((safe_filename, file_path, 'powerpoint', '.pptx'))
             elif file_ext == '.xlsx':
                 files_to_process.append((safe_filename, file_path, 'excel', '.xlsx'))
+            elif file_ext == '.xlsm':
+                files_to_process.append((safe_filename, file_path, 'excel', '.xlsm'))
             else:
                 st.warning(f"Unsupported file type: {safe_filename}")
 
