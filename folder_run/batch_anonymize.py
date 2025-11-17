@@ -71,6 +71,11 @@ class BatchStats:
         self.pdf_successes = 0
         self.pdf_failures = 0
 
+        # File count verification (data integrity)
+        self.input_files_discovered = 0  # Total processable files found in input
+        self.tracker_files_excluded = 0  # Tracker files intentionally filtered
+        self.copied_files_count = 0      # Non-processable files copied as-is
+
         # Detailed tracking
         self.file_details = []  # List of dicts for per-file stats
         self.folder_stats = defaultdict(lambda: {
@@ -158,6 +163,14 @@ class BatchStats:
         """Get formatted summary string"""
         success_rate = (self.files_succeeded / max(self.files_processed, 1)) * 100
 
+        # Calculate data integrity verification
+        total_output = self.files_succeeded + self.copied_files_count
+        expected_output = self.input_files_discovered - self.tracker_files_excluded
+        data_integrity_ok = (total_output == expected_output - self.files_failed)
+
+        integrity_icon = f"{Colors.GREEN}✓{Colors.ENDC}" if data_integrity_ok else f"{Colors.RED}✗{Colors.ENDC}"
+        integrity_status = "VERIFIED" if data_integrity_ok else "MISMATCH!"
+
         # Build PDF conversion section conditionally
         pdf_section = ""
         if include_pdf:
@@ -171,6 +184,12 @@ class BatchStats:
 {Colors.BOLD}{Colors.CYAN}╔════════════════════════════════════════════════════════════╗
 ║              BATCH PROCESSING SUMMARY                      ║
 ╚════════════════════════════════════════════════════════════╝{Colors.ENDC}
+
+{Colors.BOLD}Data Integrity:{Colors.ENDC}      {integrity_icon} {integrity_status}
+  Input Files:        {self.input_files_discovered}
+  Tracker Files:      {self.tracker_files_excluded} (excluded)
+  Processable:        {self.input_files_discovered - self.tracker_files_excluded}
+  Output Created:     {total_output} (processed: {self.files_succeeded}, copied: {self.copied_files_count})
 
 {Colors.BOLD}Files Processed:{Colors.ENDC}     {self.files_processed}
   {Colors.GREEN}✓ Succeeded:{Colors.ENDC}       {self.files_succeeded}
@@ -703,6 +722,9 @@ def copy_non_processable_files(input_dir: Path, output_dir: Path, timestamp_suff
             except Exception as e:
                 logger.warning(f"Failed to copy {relative_path}: {str(e)}")
 
+    # Update stats for data integrity tracking
+    stats.copied_files_count = files_copied
+
     logger.info(f"Copied {files_copied} non-processable files")
     return files_copied
 
@@ -737,12 +759,12 @@ def preserve_empty_folders(input_dir: Path, output_dir: Path, timestamp_suffix: 
     logger.info(f"Created {folders_created} empty folders")
 
 
-def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[Path]]:
+def discover_files(input_dir: Path, logger: logging.Logger) -> Tuple[Dict[Path, List[Path]], int, int]:
     """
     Discover all processable files organized by top-level folder
 
     Returns:
-        Dict mapping folder_path -> list of files in that folder tree
+        Tuple of (folder_files_dict, total_discovered, tracker_files_excluded)
     """
     logger.info("Discovering files in folder structure...")
 
@@ -754,8 +776,13 @@ def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[P
     for ext in extensions:
         all_files.extend(input_dir.rglob(ext))
 
+    total_discovered = len(all_files)
+
     # Filter out tracker files
+    tracker_files = [f for f in all_files if 'tracker' in f.name.lower() or 'anon tracker' in f.name.lower()]
     all_files = [f for f in all_files if 'tracker' not in f.name.lower() and 'anon tracker' not in f.name.lower()]
+
+    tracker_files_excluded = len(tracker_files)
 
     # Organize by top-level folder
     folder_files = defaultdict(list)
@@ -775,7 +802,8 @@ def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[P
             logger.warning(f"Skipping file outside input directory: {file_path}")
 
     # Log discovery results
-    logger.info(f"Discovered {len(all_files)} processable files in {len(folder_files)} top-level folders")
+    logger.info(f"Discovered {total_discovered} total files ({tracker_files_excluded} tracker files excluded)")
+    logger.info(f"Processing {len(all_files)} processable files in {len(folder_files)} top-level folders")
     for folder, files in sorted(folder_files.items()):
         try:
             folder_rel = folder.relative_to(input_dir)
@@ -783,7 +811,7 @@ def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[P
             folder_rel = folder
         logger.info(f"  {folder_rel}: {len(files)} files")
 
-    return folder_files
+    return folder_files, total_discovered, tracker_files_excluded
 
 
 def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict, logger: logging.Logger):
@@ -1134,7 +1162,11 @@ Examples:
 
     # Discover files
     print(f"\n{Colors.BOLD}Discovering files...{Colors.ENDC}")
-    folder_files = discover_files(input_dir, logger)
+    folder_files, total_discovered, tracker_excluded = discover_files(input_dir, logger)
+
+    # Update stats for data integrity tracking
+    stats.input_files_discovered = total_discovered
+    stats.tracker_files_excluded = tracker_excluded
 
     if not folder_files:
         print(f"{Colors.YELLOW}No processable files found in {input_dir}{Colors.ENDC}")
@@ -1142,6 +1174,8 @@ Examples:
 
     total_files = sum(len(files) for files in folder_files.values())
     print(f"{Colors.GREEN}✓ Found {total_files} files in {len(folder_files)} top-level folders{Colors.ENDC}")
+    if tracker_excluded > 0:
+        print(f"{Colors.YELLOW}  (Excluded {tracker_excluded} tracker files){Colors.ENDC}")
 
     # Dry run mode
     if args.dry_run:
