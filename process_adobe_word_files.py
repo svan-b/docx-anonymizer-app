@@ -356,6 +356,14 @@ def precompile_patterns(alias_map):
     """
     import re
 
+    # Handle empty alias map (edge case)
+    if not alias_map:
+        return {
+            'combined': None,
+            'lookup': {},
+            'sorted_keys': []
+        }
+
     # Sort patterns by length (longest first) to avoid partial matches
     # Example: "Netflix Inc" should match before "Netflix"
     sorted_originals = sorted(alias_map.keys(), key=len, reverse=True)

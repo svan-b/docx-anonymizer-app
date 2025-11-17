@@ -114,6 +114,28 @@ def anonymize_text_xlsx(text, alias_map, sorted_keys, compiled_patterns, track_d
     return text, replacements
 
 
+def merge_details(details1, details2):
+    """
+    Merge two replacement details dictionaries (v2.1 helper).
+
+    Args:
+        details1: First details dict {original: count, ...}
+        details2: Second details dict to merge in
+
+    Returns:
+        Merged details dict
+    """
+    if details1 is None:
+        return details2 if details2 else {}
+    if details2 is None:
+        return details1
+
+    merged = details1.copy()
+    for original, count in details2.items():
+        merged[original] = merged.get(original, 0) + count
+    return merged
+
+
 def anonymize_text_xlsx_legacy(text, alias_map, sorted_keys, compiled_patterns):
     """
     Legacy multi-pass anonymization (kept for backward compatibility).
