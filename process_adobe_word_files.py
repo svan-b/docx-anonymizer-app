@@ -30,6 +30,7 @@ from multiprocessing import Pool, cpu_count
 # Excel and DOCX processing
 from openpyxl import load_workbook
 from docx import Document
+from anonymizer_utils import anonymize_text as anonymize_text_shared, merge_details as merge_details_shared
 
 
 def strip_all_metadata(doc):

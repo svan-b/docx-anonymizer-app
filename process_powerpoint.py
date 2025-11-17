@@ -8,6 +8,7 @@ from pptx import Presentation
 from pathlib import Path
 import logging
 import re
+from anonymizer_utils import anonymize_text, merge_details
 
 
 def strip_pptx_metadata(prs):
@@ -70,117 +71,8 @@ def remove_all_images_pptx(prs):
     return removed_count
 
 
-def anonymize_text_pptx(text, alias_map, sorted_keys, compiled_patterns, track_details=False):
-    """
-    Apply anonymization replacements with case matching using SINGLE-PASS regex (v2.1).
-
-    Reuses same logic and pattern format as Word processor.
-
-    Returns:
-        If track_details=False: (text, replacements)
-        If track_details=True: (text, replacements, details_dict)
-    """
-    replacements = 0
-
-    # Extract combined pattern and lookup map
-    combined_pattern = compiled_patterns.get('combined')
-    lookup = compiled_patterns.get('lookup')
-
-    # BACKWARD COMPATIBILITY: Handle old compiled_patterns format
-    if combined_pattern is None or lookup is None:
-        # Old format - use legacy multi-pass algorithm
-        result = anonymize_text_pptx_legacy(text, alias_map, sorted_keys, compiled_patterns)
-        if track_details:
-            return result[0], result[1], {}
-        return result
-
-    # Track which originals were replaced (v2.1 feature)
-    details = {} if track_details else None
-
-    # SINGLE-PASS REPLACEMENT (v2.1 performance optimization)
-    def replace_match(match):
-        nonlocal replacements
-        matched_text = match.group(0)
-
-        # Look up the replacement using lowercase match
-        matched_lower = matched_text.lower()
-        if matched_lower not in lookup:
-            return matched_text  # Safe fallback
-
-        original, replacement = lookup[matched_lower]
-
-        # Track this replacement (v2.1)
-        if track_details:
-            details[original] = details.get(original, 0) + 1
-
-        # Preserve case pattern
-        if matched_text.isupper():
-            replacements += 1
-            return replacement.upper()
-        elif matched_text.islower():
-            replacements += 1
-            return replacement.lower()
-        elif matched_text[0].isupper():
-            replacements += 1
-            return replacement.capitalize()
-        else:
-            replacements += 1
-            return replacement
-
-    # Single regex pass replaces ALL patterns at once
-    text = combined_pattern.sub(replace_match, text)
-
-    if track_details:
-        return text, replacements, details
-    return text, replacements
-
-
-def merge_details(details1, details2):
-    """
-    Merge two replacement details dictionaries (v2.1 helper).
-    """
-    if details1 is None:
-        return details2 if details2 else {}
-    if details2 is None:
-        return details1
-
-    merged = details1.copy()
-    for original, count in details2.items():
-        merged[original] = merged.get(original, 0) + count
-    return merged
-
-
-def anonymize_text_pptx_legacy(text, alias_map, sorted_keys, compiled_patterns):
-    """
-    Legacy multi-pass anonymization (kept for backward compatibility).
-    """
-    replacements = 0
-
-    for original in sorted_keys:
-        replacement = alias_map[original]
-
-        def replace_with_case(match):
-            nonlocal replacements
-            matched_text = match.group(0)
-
-            # Preserve case pattern
-            if matched_text.isupper():
-                replacements += 1
-                return replacement.upper()
-            elif matched_text.islower():
-                replacements += 1
-                return replacement.lower()
-            elif matched_text[0].isupper():
-                replacements += 1
-                return replacement.capitalize()
-            else:
-                replacements += 1
-                return replacement
-
-        pattern = compiled_patterns[original]
-        text = pattern.sub(replace_with_case, text)
-
-    return text, replacements
+# Note: anonymize_text and merge_details are now imported from anonymizer_utils
+# This eliminates ~110 lines of duplicated code
 
 
 def anonymize_pptx(pptx_path, alias_map, sorted_keys, compiled_patterns, track_details=False):
@@ -205,11 +97,11 @@ def anonymize_pptx(pptx_path, alias_map, sorted_keys, compiled_patterns, track_d
     def anonymize_with_tracking(text, alias_map, sorted_keys, compiled_patterns):
         nonlocal document_details
         if track_details:
-            new_text, count, details = anonymize_text_pptx(text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+            new_text, count, details = anonymize_text(text, alias_map, sorted_keys, compiled_patterns, track_details=True)
             document_details = merge_details(document_details, details)
             return new_text, count
         else:
-            return anonymize_text_pptx(text, alias_map, sorted_keys, compiled_patterns)
+            return anonymize_text(text, alias_map, sorted_keys, compiled_patterns)
 
     for slide in prs.slides:
         # Process all shapes with text
