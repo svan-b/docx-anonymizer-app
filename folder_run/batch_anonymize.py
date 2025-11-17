@@ -1160,6 +1160,9 @@ Examples:
         logger.error(f"Failed to load tracker: {str(e)}")
         sys.exit(1)
 
+    # Initialize stats (must be done before discover_files for data integrity tracking)
+    stats = BatchStats()
+
     # Discover files
     print(f"\n{Colors.BOLD}Discovering files...{Colors.ENDC}")
     folder_files, total_discovered, tracker_excluded = discover_files(input_dir, logger)
@@ -1200,9 +1203,6 @@ Examples:
             print(f"{Colors.CYAN}Total non-processable files that would be copied as-is: {total_warnings}{Colors.ENDC}")
         print(f"{Colors.YELLOW}Run without --dry-run to process files{Colors.ENDC}")
         sys.exit(0)
-
-    # Initialize stats and progress
-    stats = BatchStats()
 
     # Determine auto-mode for image removal
     auto_mode = None
