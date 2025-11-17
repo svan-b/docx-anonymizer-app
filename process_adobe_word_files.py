@@ -377,8 +377,9 @@ def precompile_patterns(alias_map):
     # Example: "Netflix Inc" should match before "Netflix"
     sorted_originals = sorted(alias_map.keys(), key=len, reverse=True)
 
-    # Escape all patterns and join with | (regex OR)
-    escaped_patterns = [re.escape(original) for original in sorted_originals]
+    # Escape all patterns and add word boundaries to prevent partial matches
+    # CRITICAL: \b prevents "Ares" from matching inside "shares"
+    escaped_patterns = [r'\b' + re.escape(original) + r'\b' for original in sorted_originals]
     combined_pattern = '(' + '|'.join(escaped_patterns) + ')'
 
     # Compile combined pattern (case-insensitive)
