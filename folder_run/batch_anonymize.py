@@ -255,6 +255,7 @@ def get_folder_info(folder_path: Path, input_dir: Path) -> Dict:
     # Find all processable files in this folder tree (recursive)
     docx_files = list(folder_path.rglob('*.docx'))
     xlsx_files = list(folder_path.rglob('*.xlsx'))
+    xlsm_files = list(folder_path.rglob('*.xlsm'))  # Excel macro-enabled workbooks
     pptx_files = list(folder_path.rglob('*.pptx'))
     doc_files = list(folder_path.rglob('*.doc'))
     xls_files = list(folder_path.rglob('*.xls'))
@@ -267,7 +268,7 @@ def get_folder_info(folder_path: Path, input_dir: Path) -> Dict:
     jpeg_files = list(folder_path.rglob('*.jpeg'))
 
     # Filter out tracker files from processable files
-    processable_files = docx_files + xlsx_files + pptx_files + doc_files + xls_files + ppt_files
+    processable_files = docx_files + xlsx_files + xlsm_files + pptx_files + doc_files + xls_files + ppt_files
     processable_files = [f for f in processable_files if 'tracker' not in f.name.lower() and 'anon tracker' not in f.name.lower()]
 
     non_processable_files = pdf_files + png_files + jpg_files + jpeg_files
@@ -275,7 +276,7 @@ def get_folder_info(folder_path: Path, input_dir: Path) -> Dict:
     # Get file type breakdown
     type_counts = {
         'DOCX': len(docx_files) + len(doc_files),
-        'XLSX': len(xlsx_files) + len(xls_files),
+        'XLSX': len(xlsx_files) + len(xls_files) + len(xlsm_files),
         'PPTX': len(pptx_files) + len(ppt_files)
     }
 
@@ -573,8 +574,8 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
                 track_details=True
             )
 
-        elif extension == '.xlsx':
-            logger.info(f"Processing XLSX: {relative_path}")
+        elif extension == '.xlsx' or extension == '.xlsm':
+            logger.info(f"Processing {extension.upper()}: {relative_path}")
             replacements, images_removed, replacement_details = process_single_xlsx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, compiled_patterns, logger,
@@ -737,7 +738,7 @@ def discover_files(input_dir: Path, logger: logging.Logger) -> Dict[Path, List[P
     logger.info("Discovering files in folder structure...")
 
     # Supported extensions
-    extensions = ['*.docx', '*.xlsx', '*.pptx', '*.doc', '*.xls', '*.ppt']
+    extensions = ['*.docx', '*.xlsx', '*.xlsm', '*.pptx', '*.doc', '*.xls', '*.ppt']
 
     # Find all files
     all_files = []
