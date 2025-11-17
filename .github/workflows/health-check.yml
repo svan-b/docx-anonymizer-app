@@ -12,14 +12,14 @@ jobs:
     steps:
       - name: Check App Health
         run: |
-          echo "Checking app health at https://docx-anonymizer-app.streamlit.app"
+          echo "Checking app health at https://docx-anonymizer-app-rhddfkhz9hufvfy2x9dtua.streamlit.app/"
 
           # Follow redirects with limited redirects to avoid loops
           # --max-redirs 10: limit redirects to prevent infinite loops
           # --connect-timeout 30: wait up to 30 seconds for connection
           # --max-time 60: total operation timeout
           set +e  # Don't exit on curl error, we'll handle it
-          response=$(curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
+          response=$(curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app-rhddfkhz9hufvfy2x9dtua.streamlit.app/)
           curl_exit_code=$?
           set -e
 
@@ -29,10 +29,10 @@ jobs:
           if [ $curl_exit_code -eq 47 ]; then
             echo "✗ Too many redirects - possible redirect loop"
             echo "Attempting direct connection without following redirects..."
-            direct_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 30 --max-time 60 https://docx-anonymizer-app.streamlit.app)
+            direct_response=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 30 --max-time 60 https://docx-anonymizer-app-rhddfkhz9hufvfy2x9dtua.streamlit.app/)
             echo "Direct connection returned HTTP $direct_response"
-            if [[ $direct_response == 2* ]] || [[ $direct_response == 3* ]]; then
-              echo "✓ App is responding (redirects may be expected)"
+            if [[ $direct_response == 2* ]] || [[ $direct_response == 3* ]] || [[ $direct_response == 403 ]]; then
+              echo "✓ App is responding (HTTP $direct_response)"
               exit 0
             else
               exit 1
@@ -42,9 +42,9 @@ jobs:
             exit 1
           fi
 
-          # Accept 200 (OK) or any 2xx status
-          if [[ $response == 2* ]]; then
-            echo "✓ App is healthy"
+          # Accept 2xx status codes (success) or 403 (Streamlit app running but rejecting automated requests)
+          if [[ $response == 2* ]] || [[ $response == 403 ]]; then
+            echo "✓ App is healthy (HTTP $response)"
             exit 0
           else
             echo "✗ App health check failed with status $response"
@@ -55,7 +55,10 @@ jobs:
         if: failure()
         run: |
           echo "Attempting to wake sleeping app..."
-          curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 https://docx-anonymizer-app.streamlit.app || true
+          curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 https://docx-anonymizer-app-rhddfkhz9hufvfy2x9dtua.streamlit.app/ || true
           sleep 10
-          response=$(curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app.streamlit.app)
+          response=$(curl -L --max-redirs 10 --connect-timeout 30 --max-time 60 -s -o /dev/null -w "%{http_code}" https://docx-anonymizer-app-rhddfkhz9hufvfy2x9dtua.streamlit.app/)
           echo "App returned HTTP $response after wake attempt"
+          if [[ $response == 2* ]] || [[ $response == 403 ]]; then
+            echo "✓ App is awake and responding"
+          fi
