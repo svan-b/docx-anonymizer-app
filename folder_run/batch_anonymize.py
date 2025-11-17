@@ -165,8 +165,9 @@ class BatchStats:
 
         # Calculate data integrity verification
         total_output = self.files_succeeded + self.copied_files_count
-        expected_output = self.input_files_discovered - self.tracker_files_excluded
-        data_integrity_ok = (total_output == expected_output - self.files_failed)
+        expected_processable = self.input_files_discovered - self.tracker_files_excluded
+        expected_output = expected_processable + self.copied_files_count
+        data_integrity_ok = (total_output == expected_output and self.files_failed == 0)
 
         integrity_icon = f"{Colors.GREEN}✓{Colors.ENDC}" if data_integrity_ok else f"{Colors.RED}✗{Colors.ENDC}"
         integrity_status = "VERIFIED" if data_integrity_ok else "MISMATCH!"

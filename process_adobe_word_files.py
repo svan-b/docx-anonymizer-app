@@ -660,6 +660,12 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
         If track_details=False: (doc, total_replacements)
         If track_details=True: (doc, total_replacements, details_dict)
     """
+    # DEBUG: Verify patch is active before opening Document
+    from docx.oxml import simpletypes
+    has_patch = hasattr(simpletypes.BaseIntType, '_original_convert_from_xml')
+    if not has_patch:
+        raise RuntimeError(f"OOXML patch not active when opening {docx_path}!")
+
     doc = Document(docx_path)
     total_replacements = 0
     document_details = {} if track_details else None
