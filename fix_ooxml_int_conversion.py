@@ -72,14 +72,26 @@ def patch_python_docx():
         if not hasattr(simpletypes.BaseIntType, '_original_convert_from_xml'):
             simpletypes.BaseIntType._original_convert_from_xml = simpletypes.BaseIntType.convert_from_xml
 
-        # Create patched version
-        @classmethod
-        def safe_convert_from_xml(cls, str_value):
-            """Patched version that handles decimal values."""
-            return safe_int_from_xml(str_value)
+            # Create patched version
+            @classmethod
+            def safe_convert_from_xml(cls, str_value):
+                """Patched version that handles decimal values."""
+                return safe_int_from_xml(str_value)
 
-        # Apply patch
-        simpletypes.BaseIntType.convert_from_xml = safe_convert_from_xml
+            # Apply patch
+            simpletypes.BaseIntType.convert_from_xml = safe_convert_from_xml
+
+            # Verify patch works
+            try:
+                test_result = simpletypes.BaseIntType.convert_from_xml('19.5')
+                if test_result != 20:
+                    import logging
+                    logging.error(f"PATCH VERIFICATION FAILED: Expected 20, got {test_result}")
+                    return False
+            except Exception as e:
+                import logging
+                logging.error(f"PATCH VERIFICATION FAILED: {e}")
+                return False
 
         return True
     except ImportError:
@@ -101,14 +113,14 @@ def patch_python_pptx():
         if not hasattr(simpletypes.BaseIntType, '_original_convert_from_xml'):
             simpletypes.BaseIntType._original_convert_from_xml = simpletypes.BaseIntType.convert_from_xml
 
-        # Create patched version
-        @classmethod
-        def safe_convert_from_xml(cls, str_value):
-            """Patched version that handles decimal values."""
-            return safe_int_from_xml(str_value)
+            # Create patched version
+            @classmethod
+            def safe_convert_from_xml(cls, str_value):
+                """Patched version that handles decimal values."""
+                return safe_int_from_xml(str_value)
 
-        # Apply patch
-        simpletypes.BaseIntType.convert_from_xml = safe_convert_from_xml
+            # Apply patch
+            simpletypes.BaseIntType.convert_from_xml = safe_convert_from_xml
 
         return True
     except ImportError:
@@ -125,10 +137,13 @@ def apply_ooxml_patches():
     Returns:
         Tuple of (docx_patched, pptx_patched) booleans
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     docx_patched = patch_python_docx()
     pptx_patched = patch_python_pptx()
 
-    # Log results
+    # Log results to BOTH stdout and logger
     patches_applied = []
     if docx_patched:
         patches_applied.append("python-docx")
@@ -136,7 +151,9 @@ def apply_ooxml_patches():
         patches_applied.append("python-pptx")
 
     if patches_applied:
-        print(f"✓ Applied OOXML int() conversion patches to: {', '.join(patches_applied)}")
+        msg = f"✓ Applied OOXML int() conversion patches to: {', '.join(patches_applied)}"
+        print(msg)
+        logger.info(msg)
 
     return (docx_patched, pptx_patched)
 
