@@ -187,7 +187,11 @@ def load_aliases_from_excel(excel_path):
     Load anonymization mappings from Excel file.
     Reuses exact logic from vdr_anonymizer_final.py
     """
-    wb = load_workbook(excel_path, data_only=True)
+    # SECURITY: Validate Excel file can be loaded
+    try:
+        wb = load_workbook(excel_path, data_only=True)
+    except Exception as e:
+        raise ValueError(f"Invalid or corrupted Excel file: {e}")
 
     # Find the correct sheet (flexible detection)
     sheet = None
@@ -298,6 +302,10 @@ def load_aliases_from_excel(excel_path):
                     suffix_mappings[base_original] = base_replacement
 
     alias_map.update(suffix_mappings)
+
+    # VALIDATION: Ensure at least one mapping was found
+    if not alias_map:
+        raise ValueError("No valid anonymization mappings found in Excel file. Please check that your tracker has 'Original' and 'Replacement' columns with data.")
 
     return alias_map
 

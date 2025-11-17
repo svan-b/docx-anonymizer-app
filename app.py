@@ -474,7 +474,10 @@ if execute_btn:
         # Save input files and determine type
         files_to_process = []
         for uploaded_file in docx_files:
-            file_path = input_dir / uploaded_file.name
+            # SECURITY: Sanitize filename to prevent path traversal
+            from pathlib import Path
+            safe_filename = Path(uploaded_file.name).name  # Strips any directory components
+            file_path = input_dir / safe_filename
             with open(file_path, 'wb') as f:
                 f.write(uploaded_file.getbuffer())
 
@@ -484,7 +487,7 @@ if execute_btn:
             # Convert legacy formats to modern ones
             if file_ext == '.doc':
                 # Convert .doc to .docx
-                with st.spinner(f"Converting {uploaded_file.name} to DOCX..."):
+                with st.spinner(f"Converting {safe_filename} to DOCX..."):
                     try:
                         cmd = [
                             'soffice', '--headless', '--norestore', '--nologo',
@@ -494,15 +497,15 @@ if execute_btn:
                         subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                         converted_path = file_path.with_suffix('.docx')
                         if converted_path.exists():
-                            files_to_process.append((uploaded_file.name, converted_path, 'word', '.docx'))
+                            files_to_process.append((safe_filename, converted_path, 'word', '.docx'))
                         else:
-                            st.error(f"Conversion failed: {uploaded_file.name}")
+                            st.error(f"Conversion failed: {safe_filename}")
                     except Exception as e:
                         st.error(f"Conversion error: {e}")
 
             elif file_ext == '.ppt':
                 # Convert .ppt to .pptx
-                with st.spinner(f"Converting {uploaded_file.name} to PPTX..."):
+                with st.spinner(f"Converting {safe_filename} to PPTX..."):
                     try:
                         cmd = [
                             'soffice', '--headless', '--norestore', '--nologo',
@@ -512,15 +515,15 @@ if execute_btn:
                         subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                         converted_path = file_path.with_suffix('.pptx')
                         if converted_path.exists():
-                            files_to_process.append((uploaded_file.name, converted_path, 'powerpoint', '.pptx'))
+                            files_to_process.append((safe_filename, converted_path, 'powerpoint', '.pptx'))
                         else:
-                            st.error(f"Conversion failed: {uploaded_file.name}")
+                            st.error(f"Conversion failed: {safe_filename}")
                     except Exception as e:
                         st.error(f"Conversion error: {e}")
 
             elif file_ext == '.xls':
                 # Convert .xls to .xlsx (LibreOffice can do this)
-                with st.spinner(f"Converting {uploaded_file.name} to XLSX..."):
+                with st.spinner(f"Converting {safe_filename} to XLSX..."):
                     try:
                         cmd = [
                             'soffice', '--headless', '--norestore', '--nologo',
@@ -530,20 +533,20 @@ if execute_btn:
                         subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                         converted_path = file_path.with_suffix('.xlsx')
                         if converted_path.exists():
-                            files_to_process.append((uploaded_file.name, converted_path, 'excel', '.xlsx'))
+                            files_to_process.append((safe_filename, converted_path, 'excel', '.xlsx'))
                         else:
-                            st.error(f"Conversion failed: {uploaded_file.name}")
+                            st.error(f"Conversion failed: {safe_filename}")
                     except Exception as e:
                         st.error(f"Conversion error: {e}")
 
             elif file_ext == '.docx':
-                files_to_process.append((uploaded_file.name, file_path, 'word', '.docx'))
+                files_to_process.append((safe_filename, file_path, 'word', '.docx'))
             elif file_ext == '.pptx':
-                files_to_process.append((uploaded_file.name, file_path, 'powerpoint', '.pptx'))
+                files_to_process.append((safe_filename, file_path, 'powerpoint', '.pptx'))
             elif file_ext == '.xlsx':
-                files_to_process.append((uploaded_file.name, file_path, 'excel', '.xlsx'))
+                files_to_process.append((safe_filename, file_path, 'excel', '.xlsx'))
             else:
-                st.warning(f"Unsupported file type: {uploaded_file.name}")
+                st.warning(f"Unsupported file type: {safe_filename}")
 
         # Check if any files were successfully prepared
         if not files_to_process:
