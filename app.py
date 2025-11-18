@@ -293,7 +293,8 @@ for key, default in [
     ('originals_zip_data', None),
     ('pdf_zip_data', None),
     ('timestamp', None),
-    ('processing_logs', [])  # Store detailed logs
+    ('processing_logs', []),  # Store detailed logs
+    ('upload_key', 0)  # For clearing file uploads on "New Batch"
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -321,7 +322,7 @@ with col2:
     st.markdown("""
     <div style='text-align: right; padding-top: 1rem;'>
         <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
-            v1.8 - Tracking Hotfix<br>
+            v1.9 - UX Enhancement<br>
             <span style='font-size: 0.65rem;'>Updated: Nov 18, 2025</span>
         </p>
     </div>
@@ -373,7 +374,7 @@ with col1:
         "Upload Documents (Word, Excel, PowerPoint)",
         type=['docx', 'doc', 'pptx', 'ppt', 'xlsx', 'xls'],
         accept_multiple_files=True,
-        key="docx_upload",
+        key=f"docx_upload_{st.session_state.upload_key}",
         help="Supports batch processing: Word, PowerPoint, Excel"
     )
     if docx_files:
@@ -385,7 +386,7 @@ with col2:
     excel_file = st.file_uploader(
         "Upload Excel requirements",
         type=['xlsx'],
-        key="excel_upload",
+        key=f"excel_upload_{st.session_state.upload_key}",
         help="Column 1: Before | Column 2: After"
     )
     if excel_file:
@@ -875,11 +876,22 @@ if st.session_state.processing_complete:
 
     with stats_cols[4]:
         if st.button("🔄 NEW BATCH", width='stretch'):
+            # Clear processing results
             st.session_state.processing_complete = False
             st.session_state.results = []
             st.session_state.originals_zip_data = None
             st.session_state.pdf_zip_data = None
             st.session_state.processing_logs = []
+
+            # Clear file uploads by incrementing the upload key
+            st.session_state.upload_key += 1
+
+            # Clear uploaded file tracking
+            if 'docx_files_uploaded' in st.session_state:
+                del st.session_state.docx_files_uploaded
+            if 'excel_loaded' in st.session_state:
+                del st.session_state.excel_loaded
+
             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
