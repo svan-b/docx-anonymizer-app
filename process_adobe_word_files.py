@@ -106,9 +106,9 @@ def remove_all_images(doc):
             for drawing in drawings:
                 # Count only actual images (w:blip = Binary Large Image/Picture)
                 # This excludes charts, shapes, SmartArt, etc. (v1.8 fix)
-                has_image = len(drawing.xpath('.//a:blip', namespaces={
-                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
-                })) > 0
+                # Use findall with namespace URI
+                blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                has_image = len(blips) > 0
 
                 # Remove the drawing element from its parent
                 parent = drawing.getparent()
@@ -126,9 +126,8 @@ def remove_all_images(doc):
                     drawings = paragraph._element.xpath('.//w:drawing')
                     for drawing in drawings:
                         # Count only actual images (v1.8 fix)
-                        has_image = len(drawing.xpath('.//a:blip', namespaces={
-                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
-                        })) > 0
+                        blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                        has_image = len(blips) > 0
 
                         parent = drawing.getparent()
                         if parent is not None:
@@ -143,9 +142,8 @@ def remove_all_images(doc):
                     drawings = paragraph._element.xpath('.//w:drawing')
                     for drawing in drawings:
                         # Count only actual images (v1.8 fix)
-                        has_image = len(drawing.xpath('.//a:blip', namespaces={
-                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
-                        })) > 0
+                        blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                        has_image = len(blips) > 0
 
                         parent = drawing.getparent()
                         if parent is not None:
