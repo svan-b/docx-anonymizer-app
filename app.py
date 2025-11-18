@@ -321,7 +321,7 @@ with col2:
     st.markdown("""
     <div style='text-align: right; padding-top: 1rem;'>
         <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
-            v1.7 - Detailed Tracking<br>
+            v1.8 - Tracking Hotfix<br>
             <span style='font-size: 0.65rem;'>Updated: Nov 18, 2025</span>
         </p>
     </div>

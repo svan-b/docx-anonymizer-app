@@ -88,8 +88,8 @@ def remove_all_images(doc):
     """
     Remove ALL embedded images from DOCX (logos, watermarks, charts).
 
-    FIXED: Now uses XPath to find images at ANY depth in the XML tree,
-    not just direct children. This catches nested images like logos.
+    FIXED v1.8: Now counts only actual picture images (w:blip), not charts/shapes.
+    Previous versions counted all w:drawing elements (charts, SmartArt, shapes).
 
     Images are found in:
     - Inline shapes in paragraphs (nested in drawing elements)
@@ -104,11 +104,18 @@ def remove_all_images(doc):
             # Find ALL drawing elements at any depth (not just direct children)
             drawings = paragraph._element.xpath('.//w:drawing')
             for drawing in drawings:
+                # Count only actual images (w:blip = Binary Large Image/Picture)
+                # This excludes charts, shapes, SmartArt, etc. (v1.8 fix)
+                has_image = len(drawing.xpath('.//a:blip', namespaces={
+                    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
+                })) > 0
+
                 # Remove the drawing element from its parent
                 parent = drawing.getparent()
                 if parent is not None:
                     parent.remove(drawing)
-                    removed_count += 1
+                    if has_image:
+                        removed_count += 1
 
     # Remove images from headers and footers
     for section in doc.sections:
@@ -118,10 +125,16 @@ def remove_all_images(doc):
                 if hasattr(paragraph._element, 'xpath'):
                     drawings = paragraph._element.xpath('.//w:drawing')
                     for drawing in drawings:
+                        # Count only actual images (v1.8 fix)
+                        has_image = len(drawing.xpath('.//a:blip', namespaces={
+                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
+                        })) > 0
+
                         parent = drawing.getparent()
                         if parent is not None:
                             parent.remove(drawing)
-                            removed_count += 1
+                            if has_image:
+                                removed_count += 1
 
         # Process all footer types
         for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
@@ -129,10 +142,16 @@ def remove_all_images(doc):
                 if hasattr(paragraph._element, 'xpath'):
                     drawings = paragraph._element.xpath('.//w:drawing')
                     for drawing in drawings:
+                        # Count only actual images (v1.8 fix)
+                        has_image = len(drawing.xpath('.//a:blip', namespaces={
+                            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'
+                        })) > 0
+
                         parent = drawing.getparent()
                         if parent is not None:
                             parent.remove(drawing)
-                            removed_count += 1
+                            if has_image:
+                                removed_count += 1
 
     return removed_count
 
@@ -574,7 +593,7 @@ def anonymize_text_legacy(text, alias_map, sorted_keys, compiled_patterns):
     return text, replacements
 
 
-def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=None):
+def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=None, track_details=False):
     """
     Anonymize a single paragraph, handling text that spans multiple runs.
 
@@ -591,9 +610,21 @@ def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=Non
     XML elements rather than destroying the entire structure.
 
     PERFORMANCE: Accepts pre-compiled regex patterns for 20-40% speedup.
+
+    Args:
+        track_details: If True, return detailed replacement tracking (v1.8)
+
+    Returns:
+        If track_details=False: count (int)
+        If track_details=True: (count, details_dict)
     """
     if not paragraph.text:
+        if track_details:
+            return 0, {}
         return 0
+
+    # Track replacement details (v1.8 hotfix)
+    paragraph_details = {} if track_details else None
 
     # Check if paragraph contains hyperlinks at XML level
     p_elem = paragraph._element
@@ -608,7 +639,11 @@ def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=Non
             text_elems = hyperlink.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
             for text_elem in text_elems:
                 if text_elem.text:
-                    new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    if track_details:
+                        new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        paragraph_details = merge_details(paragraph_details, details)
+                    else:
+                        new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
                     if repl_count > 0:
                         text_elem.text = new_text
                         count += repl_count
@@ -630,20 +665,32 @@ def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=Non
                 text_elems = run_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
                 for text_elem in text_elems:
                     if text_elem.text:
-                        new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                        if track_details:
+                            new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                            paragraph_details = merge_details(paragraph_details, details)
+                        else:
+                            new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
                         if repl_count > 0:
                             text_elem.text = new_text
                             count += repl_count
 
+        if track_details:
+            return count, paragraph_details
         return count
 
     # No hyperlinks - use original approach (destroy and rebuild runs)
     # Get full paragraph text and apply replacements
     full_text = paragraph.text
-    new_text, count = anonymize_text(full_text, alias_map, sorted_keys, compiled_patterns)
+    if track_details:
+        new_text, count, details = anonymize_text(full_text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+        paragraph_details = merge_details(paragraph_details, details)
+    else:
+        new_text, count = anonymize_text(full_text, alias_map, sorted_keys, compiled_patterns)
 
     # If no replacements, skip
     if count == 0:
+        if track_details:
+            return 0, {}
         return 0
 
     # Replacement occurred - need to update the paragraph
@@ -681,6 +728,8 @@ def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=Non
         if first_run_format['font_size']:
             new_run.font.size = first_run_format['font_size']
 
+    if track_details:
+        return count, paragraph_details
     return count
 
 
@@ -723,7 +772,11 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
 
     # Anonymize paragraphs (process as whole units, not individual runs)
     for paragraph in doc.paragraphs:
-        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+        if track_details:
+            count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+            document_details = merge_details(document_details, details)
+        else:
+            count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
         total_replacements += count
 
     # Anonymize tables
@@ -731,7 +784,11 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
         for row in table.rows:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
-                    count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
                     total_replacements += count
 
     # CRITICAL FIX: Anonymize textboxes and shapes in main document body
@@ -802,7 +859,11 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
         for header in [section.header, section.first_page_header, section.even_page_header]:
             # Process regular paragraphs (using whole-paragraph approach)
             for paragraph in header.paragraphs:
-                count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                if track_details:
+                    count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                    document_details = merge_details(document_details, details)
+                else:
+                    count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
                 total_replacements += count
 
             # Process textboxes in headers (CRITICAL for SEC filings)
@@ -820,7 +881,11 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
         for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
             # Process regular paragraphs (using whole-paragraph approach)
             for paragraph in footer.paragraphs:
-                count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                if track_details:
+                    count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                    document_details = merge_details(document_details, details)
+                else:
+                    count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
                 total_replacements += count
 
             # Process textboxes in footers
