@@ -321,7 +321,7 @@ with col2:
     st.markdown("""
     <div style='text-align: right; padding-top: 1rem;'>
         <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
-            v1.6 - Phone/Zip Fix<br>
+            v1.7 - Detailed Tracking<br>
             <span style='font-size: 0.65rem;'>Updated: Nov 18, 2025</span>
         </p>
     </div>
@@ -598,6 +598,7 @@ if execute_btn:
         total_replacements = 0
         total_images = 0
         results = []
+        replacement_details = []  # NEW: Track what was actually replaced
         st.session_state.processing_logs = []
 
         logger = logging.getLogger(__name__)
@@ -619,28 +620,61 @@ if execute_btn:
             }
 
             try:
-                # Route to appropriate processor based on file type
+                # Route to appropriate processor based on file type (with detailed tracking)
                 if file_type == 'word':
-                    replacements, images = process_single_docx(
+                    replacements, images, details = process_single_docx(
                         input_path, original_output_path, alias_map, sorted_keys, logger,
                         remove_images=remove_images,
-                        clear_headers_footers_flag=clear_headers_footers
+                        clear_headers_footers_flag=clear_headers_footers,
+                        track_details=True  # NEW: Enable detailed replacement tracking
                     )
                     log_entry['details'].append(f"Word: {replacements} replacements, {images} images removed")
 
+                    # Store replacement details for this file
+                    if details:
+                        for original, count in details.items():
+                            replacement_details.append({
+                                'File': original_name,
+                                'Original': original,
+                                'Replacement': alias_map.get(original, alias_map.get(original.lower(), '?')),
+                                'Count': count
+                            })
+
                 elif file_type == 'powerpoint':
-                    replacements, images = process_single_pptx(
+                    replacements, images, details = process_single_pptx(
                         input_path, original_output_path, alias_map, sorted_keys,
-                        compiled_patterns, logger, remove_images=remove_images
+                        compiled_patterns, logger, remove_images=remove_images,
+                        track_details=True  # NEW: Enable detailed replacement tracking
                     )
                     log_entry['details'].append(f"PowerPoint: {replacements} replacements, {images} images removed")
 
+                    # Store replacement details for this file
+                    if details:
+                        for original, count in details.items():
+                            replacement_details.append({
+                                'File': original_name,
+                                'Original': original,
+                                'Replacement': alias_map.get(original, alias_map.get(original.lower(), '?')),
+                                'Count': count
+                            })
+
                 elif file_type == 'excel':
-                    replacements, images = process_single_xlsx(
+                    replacements, images, details = process_single_xlsx(
                         input_path, original_output_path, alias_map, sorted_keys,
-                        compiled_patterns, logger, remove_images=False
+                        compiled_patterns, logger, remove_images=False,
+                        track_details=True  # NEW: Enable detailed replacement tracking
                     )
                     log_entry['details'].append(f"Excel: {replacements} replacements")
+
+                    # Store replacement details for this file
+                    if details:
+                        for original, count in details.items():
+                            replacement_details.append({
+                                'File': original_name,
+                                'Original': original,
+                                'Replacement': alias_map.get(original, alias_map.get(original.lower(), '?')),
+                                'Count': count
+                            })
 
                 else:
                     raise ValueError(f"Unsupported file type: {file_type}")
@@ -742,6 +776,7 @@ if execute_btn:
 
         # Save results to session state
         st.session_state.results = results
+        st.session_state.replacement_details = replacement_details  # NEW: Store detailed replacements
         st.session_state.total_files = len(files_to_process)
         st.session_state.total_replacements = total_replacements
         st.session_state.total_images = total_images
@@ -854,7 +889,7 @@ if st.session_state.processing_complete:
     st.markdown('<div class="section-container" style="margin-top: 2rem;">', unsafe_allow_html=True)
 
     # Tabs for different views
-    tab1, tab2, tab3 = st.tabs(["📊 Results Table", "📝 Processing Logs", "ℹ️ File Details"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Results Table", "🔍 Replacement Details", "📝 Processing Logs", "ℹ️ File Details"])
 
     with tab1:
         if st.session_state.results:
@@ -866,6 +901,45 @@ if st.session_state.processing_complete:
             )
 
     with tab2:
+        # NEW: Detailed replacement tracking
+        if st.session_state.get('replacement_details'):
+            st.markdown("### What Was Replaced")
+            st.caption(f"Showing {len(st.session_state.replacement_details)} unique replacements across all files")
+
+            # Group by file for cleaner display
+            import pandas as pd
+            df_replacements = pd.DataFrame(st.session_state.replacement_details)
+
+            # Sort by File, then Count (descending)
+            df_replacements = df_replacements.sort_values(['File', 'Count'], ascending=[True, False])
+
+            # Display with nice formatting
+            st.dataframe(
+                df_replacements,
+                width='stretch',
+                hide_index=True,
+                height=500,
+                column_config={
+                    'File': st.column_config.TextColumn('File', width='medium'),
+                    'Original': st.column_config.TextColumn('Original Text', width='medium'),
+                    'Replacement': st.column_config.TextColumn('Anonymized To', width='medium'),
+                    'Count': st.column_config.NumberColumn('Times Found', format='%d')
+                }
+            )
+
+            # Summary stats by file
+            st.markdown("---")
+            st.markdown("### Summary by File")
+            summary = df_replacements.groupby('File').agg({
+                'Count': 'sum',
+                'Original': 'count'
+            }).rename(columns={'Count': 'Total Replacements', 'Original': 'Unique Terms'})
+            st.dataframe(summary, width='stretch')
+
+        else:
+            st.info("No replacements were made in this batch.")
+
+    with tab3:
         if st.session_state.get('processing_logs'):
             for log in st.session_state.processing_logs:
                 status_icon = "✓" if log['status'] == 'success' else "⚠" if log['status'] == 'warning' else "❌"
@@ -873,7 +947,7 @@ if st.session_state.processing_complete:
                     for detail in log['details']:
                         st.text(detail)
 
-    with tab3:
+    with tab4:
         # Show individual file sizes and details
         for result in st.session_state.results:
             col1, col2 = st.columns([3, 1])
