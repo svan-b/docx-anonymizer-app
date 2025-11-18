@@ -248,12 +248,22 @@ def load_aliases_from_excel(excel_path):
         # If After is blank, we replace with empty string (removes the text)
         if original is not None:
             original = str(original).strip()
+
+            # BUG FIX: Normalize numeric values stored as floats (e.g., 91301.0 → 91301)
+            # Excel often stores integers as floats, causing mismatch with document text
+            if original.endswith('.0') and original[:-2].replace('-', '').replace('(', '').replace(')', '').replace(' ', '').isdigit():
+                original = original[:-2]
+
             if original:  # Only check original is not empty
                 # Handle None or blank replacement as empty string (deletion)
                 if replacement is None or str(replacement).strip() == "":
                     alias_map[original] = ""
                 else:
-                    alias_map[original] = str(replacement).strip()
+                    replacement_str = str(replacement).strip()
+                    # BUG FIX: Also normalize replacement values
+                    if replacement_str.endswith('.0') and replacement_str[:-2].replace('-', '').replace('(', '').replace(')', '').replace(' ', '').isdigit():
+                        replacement_str = replacement_str[:-2]
+                    alias_map[original] = replacement_str
 
     # Generate reverse names for Form 4 (LastName FirstName format)
     additional_mappings = {}
@@ -368,6 +378,10 @@ def precompile_patterns(alias_map):
     - NEW: 5000 paragraphs × 1 combined pattern = 5,000 operations
 
     Result: 367x speedup on large documents (4 minutes → <1 second)
+
+    BUG FIX v1.6: Smart word boundaries that handle special characters correctly
+    - Normal words: Use \b word boundaries
+    - Numbers/special chars: Use lookaround assertions instead
     """
     import re
 
@@ -383,9 +397,33 @@ def precompile_patterns(alias_map):
     # Example: "Netflix Inc" should match before "Netflix"
     sorted_originals = sorted(alias_map.keys(), key=len, reverse=True)
 
-    # Escape all patterns and add word boundaries to prevent partial matches
-    # CRITICAL: \b prevents "Ares" from matching inside "shares"
-    escaped_patterns = [r'\b' + re.escape(original) + r'\b' for original in sorted_originals]
+    def smart_boundary(pattern):
+        """
+        Add smart word boundaries that work with special characters.
+
+        Traditional \b fails with:
+        - Phone numbers: (818) 871-3000 - parens break boundary
+        - Numbers: 91301 - may need boundary but \b not always reliable
+        - Emails: test@example.com - @ breaks boundary
+
+        Solution: Use lookaround assertions that check for:
+        - Start of string OR non-alphanumeric character before
+        - End of string OR non-alphanumeric character after
+        """
+        escaped = re.escape(pattern)
+
+        # Check if pattern starts/ends with word characters
+        starts_with_word_char = pattern[0].isalnum() if pattern else False
+        ends_with_word_char = pattern[-1].isalnum() if pattern else False
+
+        # Build boundary pattern
+        left_boundary = r'(?<![a-zA-Z0-9])' if starts_with_word_char else ''
+        right_boundary = r'(?![a-zA-Z0-9])' if ends_with_word_char else ''
+
+        return left_boundary + escaped + right_boundary
+
+    # Build combined pattern with smart boundaries
+    escaped_patterns = [smart_boundary(original) for original in sorted_originals]
     combined_pattern = '(' + '|'.join(escaped_patterns) + ')'
 
     # Compile combined pattern (case-insensitive)
