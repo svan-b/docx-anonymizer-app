@@ -25,13 +25,9 @@ from src.processors.excel_processor import process_single_xlsx
 import logging
 
 # Page configuration
-# Logo is at project root, one level up from src/
-from pathlib import Path
-logo_path_root = str(Path(__file__).parent.parent / "xai_logo.png")
-
 st.set_page_config(
     page_title="DOCX Anonymizer - xAI",
-    page_icon=logo_path_root,
+    page_icon="📄",  # Use emoji instead of file path for Streamlit Cloud compatibility
     layout="wide",
     initial_sidebar_state="expanded"
 )
