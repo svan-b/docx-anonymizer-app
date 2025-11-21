@@ -194,7 +194,7 @@ def process_single_pptx(input_path, output_path, alias_map, sorted_keys, compile
         # Remove hyperlink metadata (AFTER anonymization, before image removal)
         hyperlinks_removed = 0
         if remove_hyperlinks:
-            from hyperlink_utils import remove_hyperlinks_pptx
+            from src.utils.hyperlink_utils import remove_hyperlinks_pptx
             hyperlinks_removed = remove_hyperlinks_pptx(prs)
 
         # Remove all images (if requested)

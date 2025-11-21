@@ -169,7 +169,7 @@ def process_single_xlsx(input_path, output_path, alias_map, sorted_keys, compile
         # Remove hyperlink metadata (AFTER anonymization)
         hyperlinks_removed = 0
         if remove_hyperlinks:
-            from hyperlink_utils import remove_hyperlinks_xlsx
+            from src.utils.hyperlink_utils import remove_hyperlinks_xlsx
             hyperlinks_removed = remove_hyperlinks_xlsx(wb)
 
         # Strip ALL metadata (CRITICAL)
