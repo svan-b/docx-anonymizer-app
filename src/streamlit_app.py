@@ -25,9 +25,13 @@ from src.processors.excel_processor import process_single_xlsx
 import logging
 
 # Page configuration
+# Logo is at project root, one level up from src/
+from pathlib import Path
+logo_path_root = str(Path(__file__).parent.parent / "xai_logo.png")
+
 st.set_page_config(
     page_title="DOCX Anonymizer - xAI",
-    page_icon="xai_logo.png",
+    page_icon=logo_path_root,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -301,10 +305,10 @@ for key, default in [
 
 # xAI Logo and Header
 import base64
-from pathlib import Path
 
 # Use relative path to work on both local and Streamlit Cloud
-logo_path = Path(__file__).parent / "xai_logo.png"
+# Logo is at project root, one level up from src/
+logo_path = Path(__file__).parent.parent / "xai_logo.png"
 with open(logo_path, "rb") as f:
     logo_data = base64.b64encode(f.read()).decode()
     st.markdown(f"""
