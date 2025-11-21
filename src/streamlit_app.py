@@ -12,25 +12,33 @@ import shutil
 import subprocess
 import zipfile
 from datetime import datetime
+import traceback
 
-# Import anonymization functions
-from src.processors.docx_processor import (
-    load_aliases_from_excel,
-    categorize_and_sort_aliases,
-    process_single_docx,
-    precompile_patterns
-)
-from src.processors.pptx_processor import process_single_pptx
-from src.processors.excel_processor import process_single_xlsx
-import logging
-
-# Page configuration
+# Page configuration MUST come first, before any other Streamlit commands
 st.set_page_config(
     page_title="DOCX Anonymizer - xAI",
     page_icon="📄",  # Use emoji instead of file path for Streamlit Cloud compatibility
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Wrap all imports and app code in try/except to catch and display errors
+try:
+    # Import anonymization functions
+    from src.processors.docx_processor import (
+        load_aliases_from_excel,
+        categorize_and_sort_aliases,
+        process_single_docx,
+        precompile_patterns
+    )
+    from src.processors.pptx_processor import process_single_pptx
+    from src.processors.excel_processor import process_single_xlsx
+    import logging
+
+except Exception as e:
+    st.error(f"❌ **Import Error**: {e}")
+    st.code(traceback.format_exc())
+    st.stop()
 
 # Custom CSS - xAI Soft Aesthetic
 st.markdown("""
