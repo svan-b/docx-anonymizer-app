@@ -30,6 +30,9 @@ import shutil
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 import time
+import multiprocessing
+from multiprocessing import Pool, Manager
+import os
 
 # Add parent directory to path to import proven modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -68,6 +71,7 @@ class BatchStats:
         self.files_skipped = 0
         self.total_replacements = 0
         self.total_images_removed = 0
+        self.total_hyperlinks_removed = 0
         self.pdf_successes = 0
         self.pdf_failures = 0
 
@@ -80,7 +84,7 @@ class BatchStats:
         self.file_details = []  # List of dicts for per-file stats
         self.folder_stats = defaultdict(lambda: {
             'files': 0, 'succeeded': 0, 'failed': 0, 'skipped': 0,
-            'replacements': 0, 'images_removed': 0
+            'replacements': 0, 'images_removed': 0, 'hyperlinks_removed': 0
         })
         self.replacement_frequency = defaultdict(int)  # Track which replacements used
         self.error_log = []  # Detailed error information
@@ -89,6 +93,7 @@ class BatchStats:
 
     def add_file_result(self, file_path: Path, relative_path: Path, status: str,
                        replacements: int = 0, images_removed: int = 0,
+                       hyperlinks_removed: int = 0,
                        processing_time: float = 0, error_msg: str = "",
                        replacement_details: dict = None):
         """Record result for a single file"""
@@ -100,6 +105,7 @@ class BatchStats:
             self.files_succeeded += 1
             self.total_replacements += replacements
             self.total_images_removed += images_removed
+            self.total_hyperlinks_removed += hyperlinks_removed
         elif status == 'failed':
             self.files_failed += 1
         elif status == 'skipped':
@@ -114,6 +120,7 @@ class BatchStats:
             'status': status,
             'replacements': replacements,
             'images_removed': images_removed,
+            'hyperlinks_removed': hyperlinks_removed,
             'processing_time': processing_time,
             'error': error_msg
         })
@@ -133,6 +140,7 @@ class BatchStats:
             self.folder_stats[folder_name]['succeeded'] += 1
             self.folder_stats[folder_name]['replacements'] += replacements
             self.folder_stats[folder_name]['images_removed'] += images_removed
+            self.folder_stats[folder_name]['hyperlinks_removed'] += hyperlinks_removed
         elif status == 'failed':
             self.folder_stats[folder_name]['failed'] += 1
         elif status == 'skipped':
@@ -199,7 +207,8 @@ class BatchStats:
 
 {Colors.BOLD}Anonymization:{Colors.ENDC}
   Replacements:       {self.total_replacements:,}
-  Images Removed:     {self.total_images_removed:,}{pdf_section}
+  Images Removed:     {self.total_images_removed:,}
+  Hyperlinks Removed: {self.total_hyperlinks_removed:,}{pdf_section}
 {Colors.BOLD}Performance:{Colors.ENDC}
   Success Rate:       {success_rate:.1f}%
   Total Time:         {self.get_elapsed_time()}
@@ -348,9 +357,14 @@ def get_folder_info(folder_path: Path, input_dir: Path) -> Dict:
     }
 
 
-def prompt_for_image_removal(folder_info: Dict, auto_mode: Optional[bool] = None) -> Tuple[bool, Optional[bool]]:
+def prompt_for_image_removal(folder_info: Dict, auto_mode: Optional[bool] = None, folder_specific_removal: list = None) -> Tuple[bool, Optional[bool]]:
     """
     Prompt user whether to remove images from this folder
+
+    Args:
+        folder_info: Dictionary with folder information
+        auto_mode: Global auto setting (True=yes, False=no, None=prompt)
+        folder_specific_removal: List of folder paths where images should be removed (overrides auto_mode)
 
     Returns:
         (remove_images, auto_mode)
@@ -358,6 +372,18 @@ def prompt_for_image_removal(folder_info: Dict, auto_mode: Optional[bool] = None
         auto_mode = False: auto-no for all remaining
         auto_mode = None: continue prompting
     """
+    # Check if this folder matches any folder-specific removal paths
+    if folder_specific_removal:
+        folder_path_str = str(folder_info['path'])
+        for removal_path in folder_specific_removal:
+            # Normalize paths for comparison (handle both / and \)
+            normalized_folder = folder_path_str.replace('\\', '/').strip()
+            normalized_removal = removal_path.replace('\\', '/').strip()
+
+            if normalized_folder == normalized_removal or normalized_folder.endswith('/' + normalized_removal):
+                print(f"{Colors.CYAN}→ Auto-removing images (folder-specific rule): {folder_path_str}{Colors.ENDC}")
+                return True, auto_mode  # Remove images, but keep auto_mode for other folders
+
     if auto_mode is not None:
         return auto_mode, auto_mode
 
@@ -416,6 +442,41 @@ def prompt_for_image_removal(folder_info: Dict, auto_mode: Optional[bool] = None
             sys.exit(0)
         else:
             print(f"{Colors.RED}Invalid response. Please enter y/n/a/s/q{Colors.ENDC}")
+
+
+def should_remove_images_for_file(file_relative_path: Path, folder_default: bool,
+                                  folder_specific_removal: list) -> bool:
+    """
+    Determine if images should be removed for a specific file.
+
+    Checks if the file's path matches any folder-specific removal paths.
+    This enables subfolder-level granularity for image removal.
+
+    Args:
+        file_relative_path: File path relative to input directory
+        folder_default: Default decision for the top-level folder
+        folder_specific_removal: List of folder paths where images should be removed
+
+    Returns:
+        True if images should be removed, False otherwise
+    """
+    if not folder_specific_removal:
+        return folder_default
+
+    # Convert file path to string and normalize
+    file_path_str = str(file_relative_path).replace('\\', '/').strip()
+
+    # Check if file is within any folder-specific removal path
+    for removal_path in folder_specific_removal:
+        normalized_removal = removal_path.replace('\\', '/').strip()
+
+        # Check if file path starts with the removal path
+        if file_path_str.startswith(normalized_removal + '/') or \
+           file_path_str.startswith(normalized_removal):
+            return True
+
+    # Fall back to folder default
+    return folder_default
 
 
 def convert_legacy_format(file_path: Path, output_dir: Path, logger: logging.Logger) -> Optional[Path]:
@@ -526,20 +587,21 @@ def convert_to_pdf(file_path: Path, pdf_output_dir: Path, logger: logging.Logger
             logger.debug(f"PDF conversion successful: {pdf_file.name}")
             return True
         else:
-            logger.warning(f"PDF conversion failed for {file_path.name}: {result.stderr}")
+            logger.debug(f"PDF conversion failed for {file_path.name}: {result.stderr}")
             return False
 
     except subprocess.TimeoutExpired:
-        logger.warning(f"PDF conversion timeout for {file_path.name}")
+        logger.debug(f"PDF conversion timeout for {file_path.name}")
         return False
     except Exception as e:
-        logger.warning(f"PDF conversion error for {file_path.name}: {str(e)}")
+        logger.debug(f"PDF conversion error for {file_path.name}: {str(e)}")
         return False
 
 
 def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_dir: Path,
                 alias_map: Dict, sorted_keys: List, compiled_patterns: Dict,
                 logger: logging.Logger, remove_images: bool = True,
+                remove_hyperlinks: bool = False,
                 generate_pdf: bool = True, timestamp_suffix: str = "") -> Dict:
     """
     Process a single file (anonymize and optionally convert to PDF)
@@ -586,29 +648,32 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
 
         if extension == '.docx':
             logger.info(f"Processing DOCX: {relative_path}")
-            replacements, images_removed, replacement_details = process_single_docx(
+            replacements, images_removed, hyperlinks_removed, replacement_details = process_single_docx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, logger,
                 remove_images=remove_images,
+                remove_hyperlinks=remove_hyperlinks,
                 clear_headers_footers_flag=False,
                 track_details=True
             )
 
         elif extension == '.pptx':
             logger.info(f"Processing PPTX: {relative_path}")
-            replacements, images_removed, replacement_details = process_single_pptx(
+            replacements, images_removed, hyperlinks_removed, replacement_details = process_single_pptx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, compiled_patterns, logger,
                 remove_images=remove_images,
+                remove_hyperlinks=remove_hyperlinks,
                 track_details=True
             )
 
         elif extension == '.xlsx' or extension == '.xlsm':
             logger.info(f"Processing {extension.upper()}: {relative_path}")
-            replacements, images_removed, replacement_details = process_single_xlsx(
+            replacements, images_removed, hyperlinks_removed, replacement_details = process_single_xlsx(
                 str(file_path), str(output_path),
                 alias_map, sorted_keys, compiled_patterns, logger,
                 remove_images=False,  # Excel doesn't support image removal
+                remove_hyperlinks=remove_hyperlinks,
                 track_details=True
             )
 
@@ -616,10 +681,11 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
             logger.info(f"Processing XLS (legacy): {relative_path}")
             # For .xls files, output as .xlsx (converted format)
             output_path_xlsx = output_path.with_suffix('.xlsx')
-            replacements, images_removed, replacement_details = process_single_xls(
+            replacements, images_removed, hyperlinks_removed, replacement_details = process_single_xls(
                 str(file_path), str(output_path_xlsx),
                 alias_map, sorted_keys, compiled_patterns, logger,
                 remove_images=False,  # Excel doesn't support image removal
+                remove_hyperlinks=remove_hyperlinks,
                 track_details=True
             )
 
@@ -637,6 +703,7 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
             'status': 'success',
             'replacements': replacements,
             'images_removed': images_removed,
+            'hyperlinks_removed': hyperlinks_removed,
             'error': '',
             'processing_time': 0,  # Will be set below
             'replacement_details': replacement_details  # v2.1
@@ -831,7 +898,7 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
         ws_files.title = "File Details"
 
         headers = ['File Path', 'Folder', 'Filename', 'Type', 'Status',
-                  'Replacements', 'Images Removed', 'Processing Time (s)', 'Error']
+                  'Replacements', 'Images Removed', 'Hyperlinks Removed', 'Processing Time (s)', 'Error']
         ws_files.append(headers)
 
         # Style headers
@@ -853,6 +920,7 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
                 detail['status'],
                 detail['replacements'],
                 detail['images_removed'],
+                detail.get('hyperlinks_removed', 0),
                 round(detail['processing_time'], 2),
                 detail['error']
             ])
@@ -867,7 +935,7 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
         ws_folders = wb.create_sheet("Folder Summary")
 
         folder_headers = ['Folder', 'Total Files', 'Succeeded', 'Failed', 'Skipped',
-                         'Replacements', 'Images Removed', 'Success Rate (%)']
+                         'Replacements', 'Images Removed', 'Hyperlinks Removed', 'Success Rate (%)']
         ws_folders.append(folder_headers)
 
         # Style headers
@@ -888,6 +956,7 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
                 folder_data['skipped'],
                 folder_data['replacements'],
                 folder_data['images_removed'],
+                folder_data.get('hyperlinks_removed', 0),
                 round(success_rate, 1)
             ])
 
@@ -909,6 +978,7 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
             ['', ''],
             ['Total Replacements', stats.total_replacements],
             ['Total Images Removed', stats.total_images_removed],
+            ['Total Hyperlinks Removed', stats.total_hyperlinks_removed],
             ['', ''],
             ['PDF Conversions Succeeded', stats.pdf_successes],
             ['PDF Conversions Failed', stats.pdf_failures],
@@ -1065,6 +1135,77 @@ def generate_excel_report(stats: BatchStats, report_path: Path, alias_map: Dict,
         logger.error(f"Failed to generate Excel report: {str(e)}")
 
 
+def process_file_parallel_wrapper(args_tuple):
+    """
+    Wrapper function for parallel file processing.
+
+    This function is called by multiprocessing.Pool workers.
+    It unpacks arguments and calls process_file, returning results.
+
+    Args:
+        args_tuple: Tuple of (file_path, input_dir, output_dir, pdf_output_dir,
+                             alias_map, sorted_keys, compiled_patterns, remove_images,
+                             remove_hyperlinks, generate_pdf, timestamp_suffix,
+                             folder_specific_removal, relative_path)
+
+    Returns:
+        Dict with file processing results including relative_path for identification
+    """
+    (file_path, input_dir, output_dir, pdf_output_dir, alias_map, sorted_keys,
+     compiled_patterns, remove_images, remove_hyperlinks, generate_pdf,
+     timestamp_suffix, folder_specific_removal, relative_path_str) = args_tuple
+
+    # Reconstruct Path objects (can't pickle Path directly in some Python versions)
+    file_path = Path(file_path)
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    pdf_output_dir = Path(pdf_output_dir)
+    relative_path = Path(relative_path_str)
+
+    # Setup a simple logger for this worker (file logging only, no console spam)
+    import logging
+    logger = logging.getLogger(f'worker_{os.getpid()}')
+    logger.setLevel(logging.INFO)
+    logger.handlers = []  # Clear any existing handlers
+
+    # Check if this file should have images removed (subfolder-level check)
+    file_remove_images = should_remove_images_for_file(
+        relative_path, remove_images, folder_specific_removal
+    )
+
+    # Process the file
+    try:
+        result = process_file(
+            file_path, input_dir, output_dir, pdf_output_dir,
+            alias_map, sorted_keys, compiled_patterns,
+            logger, remove_images=file_remove_images,
+            remove_hyperlinks=remove_hyperlinks,
+            generate_pdf=generate_pdf,
+            timestamp_suffix=timestamp_suffix
+        )
+
+        # Add identifying information to result
+        result['relative_path'] = str(relative_path)
+        result['file_path'] = str(file_path)
+        result['folder_specific_override'] = (file_remove_images != remove_images)
+
+        return result
+
+    except Exception as e:
+        # Return error result
+        return {
+            'relative_path': str(relative_path),
+            'file_path': str(file_path),
+            'status': 'failed',
+            'replacements': 0,
+            'images_removed': 0,
+            'hyperlinks_removed': 0,
+            'error': f"Worker exception: {str(e)}",
+            'processing_time': 0,
+            'folder_specific_override': False
+        }
+
+
 def main():
     """Main batch processing function"""
     parser = argparse.ArgumentParser(
@@ -1099,8 +1240,14 @@ Examples:
                        help='Automatically remove images from all folders (no prompting)')
     parser.add_argument('--auto-no-images', action='store_true',
                        help='Automatically preserve images in all folders (no prompting)')
+    parser.add_argument('--remove-images-from-folders', type=str, default='',
+                       help='Comma-separated list of folder/subfolder paths (relative to input) where images should be removed. Supports deep subfolder paths like "3. Securities & SEC Filings\\3.1 10-K - 10-Q". Overrides --auto-no-images for matching files.')
     parser.add_argument('--timestamp-output', action='store_true',
                        help='Add timestamp to output folder names (prevents overwriting previous runs)')
+    parser.add_argument('--remove-hyperlinks', action='store_true',
+                       help='Remove hyperlink metadata from all documents (preserves text, default: OFF)')
+    parser.add_argument('--parallel-workers', type=int, default=1,
+                       help='Number of parallel workers for file processing (default: 1 = sequential). Recommended: 6-8 for high-RAM systems. Higher values = faster but more RAM usage.')
 
     args = parser.parse_args()
 
@@ -1128,6 +1275,14 @@ Examples:
     if not tracker_path.exists():
         print(f"{Colors.RED}Error: Tracker file does not exist: {tracker_path}{Colors.ENDC}")
         sys.exit(1)
+
+    # Validate parallel workers
+    cpu_count = multiprocessing.cpu_count()
+    if args.parallel_workers < 1:
+        print(f"{Colors.RED}Error: --parallel-workers must be >= 1{Colors.ENDC}")
+        sys.exit(1)
+    if args.parallel_workers > cpu_count * 2:
+        print(f"{Colors.YELLOW}Warning: --parallel-workers ({args.parallel_workers}) exceeds 2x CPU cores ({cpu_count}). This may slow performance.{Colors.ENDC}")
 
     # Setup logging
     log_dir = Path(__file__).parent / 'logs'
@@ -1205,6 +1360,14 @@ Examples:
         print(f"{Colors.YELLOW}Run without --dry-run to process files{Colors.ENDC}")
         sys.exit(0)
 
+    # Parse folder-specific image removal list
+    folder_specific_removal = []
+    if args.remove_images_from_folders:
+        folder_specific_removal = [path.strip() for path in args.remove_images_from_folders.split(',')]
+        print(f"{Colors.CYAN}Folder-specific image removal enabled for {len(folder_specific_removal)} folder(s):{Colors.ENDC}")
+        for folder in folder_specific_removal:
+            print(f"  • {folder}")
+
     # Determine auto-mode for image removal
     auto_mode = None
     if args.auto_yes_images:
@@ -1215,16 +1378,21 @@ Examples:
         print(f"{Colors.CYAN}Auto-preserve images mode enabled{Colors.ENDC}")
 
     # Process each folder
-    print(f"\n{Colors.BOLD}{Colors.GREEN}Starting batch processing...{Colors.ENDC}\n")
+    print(f"\n{Colors.BOLD}{Colors.GREEN}Starting batch processing...{Colors.ENDC}")
+    if args.parallel_workers > 1:
+        print(f"{Colors.CYAN}Parallel mode: {args.parallel_workers} workers (CPU cores: {cpu_count}){Colors.ENDC}")
+        print(f"{Colors.CYAN}Progress updates will be shown per folder batch{Colors.ENDC}\n")
+    else:
+        print(f"{Colors.CYAN}Sequential mode (use --parallel-workers N for faster processing){Colors.ENDC}\n")
 
-    progress = ProgressDisplay(total_files)
+    progress = ProgressDisplay(total_files) if args.parallel_workers == 1 else None
 
     for folder_path in sorted(folder_files.keys()):
         files = folder_files[folder_path]
 
         # Get folder info and prompt for image removal
         folder_info = get_folder_info(folder_path, input_dir)
-        remove_images, auto_mode = prompt_for_image_removal(folder_info, auto_mode)
+        remove_images, auto_mode = prompt_for_image_removal(folder_info, auto_mode, folder_specific_removal)
 
         # Check if user chose to skip
         if remove_images is None:
@@ -1235,33 +1403,106 @@ Examples:
                                     error_msg="User skipped folder")
             continue
 
-        # Process all files in this folder
-        for file_path in files:
-            relative_path = file_path.relative_to(input_dir)
+        # Process all files in this folder (sequential or parallel)
+        if args.parallel_workers == 1:
+            # SEQUENTIAL MODE: Process files one at a time
+            for file_path in files:
+                relative_path = file_path.relative_to(input_dir)
 
-            # Process file
-            result = process_file(
-                file_path, input_dir, output_dir, pdf_output_dir,
-                alias_map, sorted_keys, compiled_patterns,
-                logger, remove_images=remove_images,
-                generate_pdf=not args.no_pdf,
-                timestamp_suffix=timestamp_suffix
-            )
+                # Check if this specific file should have images removed (subfolder-level check)
+                file_remove_images = should_remove_images_for_file(
+                    relative_path, remove_images, folder_specific_removal
+                )
 
-            # Update stats
-            stats.add_file_result(
-                file_path, relative_path, result['status'],
-                result['replacements'], result['images_removed'],
-                result['processing_time'], result.get('error', ''),
-                replacement_details=result.get('replacement_details', {})
-            )
+                # Log if folder-specific rule overrides folder default
+                if file_remove_images != remove_images and folder_specific_removal:
+                    logger.info(f"Folder-specific image removal rule applied for: {relative_path}")
 
-            # Track PDF conversion
-            if not args.no_pdf and 'pdf_success' in result:
-                stats.add_pdf_result(result['pdf_success'])
+                # Process file
+                result = process_file(
+                    file_path, input_dir, output_dir, pdf_output_dir,
+                    alias_map, sorted_keys, compiled_patterns,
+                    logger, remove_images=file_remove_images,
+                    remove_hyperlinks=args.remove_hyperlinks,
+                    generate_pdf=not args.no_pdf,
+                    timestamp_suffix=timestamp_suffix
+                )
 
-            # Update progress display
-            progress.update(str(relative_path), stats)
+                # Update stats
+                stats.add_file_result(
+                    file_path, relative_path, result['status'],
+                    result['replacements'], result['images_removed'],
+                    result.get('hyperlinks_removed', 0),
+                    result['processing_time'], result.get('error', ''),
+                    replacement_details=result.get('replacement_details', {})
+                )
+
+                # Track PDF conversion
+                if not args.no_pdf and 'pdf_success' in result:
+                    stats.add_pdf_result(result['pdf_success'])
+
+                # Update progress display
+                progress.update(str(relative_path), stats)
+
+        else:
+            # PARALLEL MODE: Process files in parallel using Pool
+            print(f"{Colors.BOLD}Processing folder:{Colors.ENDC} {folder_info['path']} ({len(files)} files)")
+
+            # Build task list for parallel processing
+            tasks = []
+            for file_path in files:
+                relative_path = file_path.relative_to(input_dir)
+
+                # Prepare arguments tuple for worker (convert Paths to strings for pickling)
+                task_args = (
+                    str(file_path),
+                    str(input_dir),
+                    str(output_dir),
+                    str(pdf_output_dir),
+                    alias_map,
+                    sorted_keys,
+                    compiled_patterns,
+                    remove_images,  # Folder default
+                    args.remove_hyperlinks,
+                    not args.no_pdf,
+                    timestamp_suffix,
+                    folder_specific_removal,
+                    str(relative_path)
+                )
+                tasks.append(task_args)
+
+            # Process files in parallel
+            folder_start = time.time()
+            with Pool(processes=args.parallel_workers) as pool:
+                results = pool.map(process_file_parallel_wrapper, tasks)
+
+            folder_time = time.time() - folder_start
+
+            # Collect results and update stats
+            for result in results:
+                file_path = Path(result['file_path'])
+                relative_path = Path(result['relative_path'])
+
+                # Log folder-specific overrides
+                if result.get('folder_specific_override') and folder_specific_removal:
+                    logger.info(f"Folder-specific image removal rule applied for: {relative_path}")
+
+                # Update stats
+                stats.add_file_result(
+                    file_path, relative_path, result['status'],
+                    result['replacements'], result['images_removed'],
+                    result.get('hyperlinks_removed', 0),
+                    result['processing_time'], result.get('error', ''),
+                    replacement_details=result.get('replacement_details', {})
+                )
+
+                # Track PDF conversion
+                if not args.no_pdf and 'pdf_success' in result:
+                    stats.add_pdf_result(result['pdf_success'])
+
+            # Show folder batch summary
+            print(f"{Colors.GREEN}✓ Completed {len(files)} files in {folder_time:.1f}s "
+                  f"({stats.files_succeeded} succeeded, {stats.files_failed} failed){Colors.ENDC}")
 
     # Copy non-processable files and preserve empty folders
     print(f"\n{Colors.BOLD}Finalizing folder structure...{Colors.ENDC}")

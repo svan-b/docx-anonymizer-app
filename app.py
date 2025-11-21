@@ -322,8 +322,8 @@ with col2:
     st.markdown("""
     <div style='text-align: right; padding-top: 1rem;'>
         <p style='font-size: 0.7rem; color: rgba(255, 255, 255, 0.4); margin: 0;'>
-            v1.9 - UX Enhancement<br>
-            <span style='font-size: 0.65rem;'>Updated: Nov 18, 2025</span>
+            v2.0.1 - Performance Optimization<br>
+            <span style='font-size: 0.65rem;'>Updated: Nov 20, 2025</span>
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -415,6 +415,15 @@ with col2:
         value=False,
         key="clear_headers_footers",
         help="Removes logo and text from headers/footers"
+    )
+
+col3, col4 = st.columns(2)
+with col3:
+    remove_hyperlinks = st.checkbox(
+        "REMOVE HYPERLINKS",
+        value=False,
+        key="remove_hyperlinks",
+        help="Removes hyperlink metadata (URLs stay as plain text)"
     )
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -581,7 +590,7 @@ if execute_btn:
             status_text = st.empty()
 
             # Create empty containers for metrics
-            metrics_cols = st.columns(4)
+            metrics_cols = st.columns(5)
             metric_containers = []
             for col in metrics_cols:
                 with col:
@@ -591,13 +600,15 @@ if execute_btn:
             metric_containers[0].metric("FILES", f"0/{len(files_to_process)}")
             metric_containers[1].metric("REPLACEMENTS", "0")
             metric_containers[2].metric("IMAGES REMOVED", "0")
-            metric_containers[3].metric("PDF STATUS", "⏳")
+            metric_containers[3].metric("HYPERLINKS", "0" if remove_hyperlinks else "—")
+            metric_containers[4].metric("PDF STATUS", "⏳")
 
             st.markdown('</div>', unsafe_allow_html=True)
 
         # Initialize counters and logs
         total_replacements = 0
         total_images = 0
+        total_hyperlinks = 0
         results = []
         replacement_details = []  # NEW: Track what was actually replaced
         st.session_state.processing_logs = []
@@ -623,13 +634,17 @@ if execute_btn:
             try:
                 # Route to appropriate processor based on file type (with detailed tracking)
                 if file_type == 'word':
-                    replacements, images, details = process_single_docx(
+                    replacements, images, hyperlinks, details = process_single_docx(
                         input_path, original_output_path, alias_map, sorted_keys, logger,
                         remove_images=remove_images,
+                        remove_hyperlinks=remove_hyperlinks,
                         clear_headers_footers_flag=clear_headers_footers,
                         track_details=True  # NEW: Enable detailed replacement tracking
                     )
-                    log_entry['details'].append(f"Word: {replacements} replacements, {images} images removed")
+                    log_parts = [f"Word: {replacements} replacements", f"{images} images removed"]
+                    if remove_hyperlinks:
+                        log_parts.append(f"{hyperlinks} hyperlinks removed")
+                    log_entry['details'].append(", ".join(log_parts))
 
                     # Store replacement details for this file
                     if details:
@@ -642,12 +657,16 @@ if execute_btn:
                             })
 
                 elif file_type == 'powerpoint':
-                    replacements, images, details = process_single_pptx(
+                    replacements, images, hyperlinks, details = process_single_pptx(
                         input_path, original_output_path, alias_map, sorted_keys,
                         compiled_patterns, logger, remove_images=remove_images,
+                        remove_hyperlinks=remove_hyperlinks,
                         track_details=True  # NEW: Enable detailed replacement tracking
                     )
-                    log_entry['details'].append(f"PowerPoint: {replacements} replacements, {images} images removed")
+                    log_parts = [f"PowerPoint: {replacements} replacements", f"{images} images removed"]
+                    if remove_hyperlinks:
+                        log_parts.append(f"{hyperlinks} hyperlinks removed")
+                    log_entry['details'].append(", ".join(log_parts))
 
                     # Store replacement details for this file
                     if details:
@@ -660,12 +679,16 @@ if execute_btn:
                             })
 
                 elif file_type == 'excel':
-                    replacements, images, details = process_single_xlsx(
+                    replacements, images, hyperlinks, details = process_single_xlsx(
                         input_path, original_output_path, alias_map, sorted_keys,
                         compiled_patterns, logger, remove_images=False,
+                        remove_hyperlinks=remove_hyperlinks,
                         track_details=True  # NEW: Enable detailed replacement tracking
                     )
-                    log_entry['details'].append(f"Excel: {replacements} replacements")
+                    log_parts = [f"Excel: {replacements} replacements"]
+                    if remove_hyperlinks:
+                        log_parts.append(f"{hyperlinks} hyperlinks removed")
+                    log_entry['details'].append(", ".join(log_parts))
 
                     # Store replacement details for this file
                     if details:
@@ -682,6 +705,7 @@ if execute_btn:
 
                 total_replacements += replacements
                 total_images += images
+                total_hyperlinks += hyperlinks
 
                 # Convert to PDF (works for all file types via LibreOffice)
                 pdf_output_path = pdf_output_dir / Path(original_name).with_suffix('.pdf').name
@@ -709,6 +733,7 @@ if execute_btn:
                             'file_type': file_type.capitalize(),
                             'replacements': replacements,
                             'images': images,
+                            'hyperlinks': hyperlinks,
                             'pdf_status': '✓ Success',
                             'pdf_size_kb': round(size_kb)
                         })
@@ -720,6 +745,7 @@ if execute_btn:
                             'file_type': file_type.capitalize(),
                             'replacements': replacements,
                             'images': images,
+                            'hyperlinks': hyperlinks,
                             'pdf_status': '✗ Failed',
                             'pdf_size_kb': 0
                         })
@@ -732,6 +758,7 @@ if execute_btn:
                         'file_type': file_type.capitalize(),
                         'replacements': replacements,
                         'images': images,
+                        'hyperlinks': hyperlinks,
                         'pdf_status': '⚠ Timeout',
                         'pdf_size_kb': 0
                     })
@@ -743,6 +770,7 @@ if execute_btn:
                         'file_type': file_type.capitalize(),
                         'replacements': replacements,
                         'images': images,
+                        'hyperlinks': hyperlinks,
                         'pdf_status': '✗ Error',
                         'pdf_size_kb': 0
                     })
@@ -755,6 +783,7 @@ if execute_btn:
                     'file_type': file_type.capitalize(),
                     'replacements': 0,
                     'images': 0,
+                    'hyperlinks': 0,
                     'pdf_status': f'✗ {file_type.capitalize()} Error',
                     'pdf_size_kb': 0
                 })
@@ -769,8 +798,9 @@ if execute_btn:
             metric_containers[0].metric("FILES", f"{i+1}/{len(files_to_process)}")
             metric_containers[1].metric("REPLACEMENTS", f"{total_replacements:,}")
             metric_containers[2].metric("IMAGES REMOVED", f"{total_images:,}")
+            metric_containers[3].metric("HYPERLINKS", f"{total_hyperlinks:,}" if remove_hyperlinks else "—")
             pdf_success = sum(1 for r in results if '✓' in r.get('pdf_status', ''))
-            metric_containers[3].metric("PDF SUCCESS", f"{pdf_success}/{i+1}")
+            metric_containers[4].metric("PDF SUCCESS", f"{pdf_success}/{i+1}")
 
         # Clear status and show completion
         status_text.success("✓ Processing Complete!")
@@ -781,6 +811,7 @@ if execute_btn:
         st.session_state.total_files = len(files_to_process)
         st.session_state.total_replacements = total_replacements
         st.session_state.total_images = total_images
+        st.session_state.total_hyperlinks = total_hyperlinks
         st.session_state.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Create ZIP archives
@@ -859,7 +890,7 @@ if st.session_state.processing_complete:
     # Summary stats in a compact row
     st.markdown('<div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">', unsafe_allow_html=True)
 
-    stats_cols = st.columns(5)
+    stats_cols = st.columns(6)
 
     with stats_cols[0]:
         st.metric("FILES", st.session_state.total_files, delta=None)
@@ -871,10 +902,13 @@ if st.session_state.processing_complete:
         st.metric("IMAGES", st.session_state.total_images, delta="Removed" if st.session_state.total_images > 0 else None)
 
     with stats_cols[3]:
+        st.metric("HYPERLINKS", st.session_state.get('total_hyperlinks', 0), delta="Removed" if st.session_state.get('total_hyperlinks', 0) > 0 else None)
+
+    with stats_cols[4]:
         pdf_success = sum(1 for r in st.session_state.results if '✓' in r.get('pdf_status', ''))
         st.metric("PDF SUCCESS", f"{pdf_success}/{st.session_state.total_files}", delta=None)
 
-    with stats_cols[4]:
+    with stats_cols[5]:
         if st.button("🔄 NEW BATCH", width='stretch'):
             # Clear processing results
             st.session_state.processing_complete = False

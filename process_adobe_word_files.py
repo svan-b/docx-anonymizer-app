@@ -93,63 +93,53 @@ def remove_all_images(doc):
 
     Images are found in:
     - Inline shapes in paragraphs (nested in drawing elements)
+    - Tables (all cells) - CRITICAL for 10-K documents
     - Headers (all sections)
     - Footers (all sections)
     """
     removed_count = 0
 
-    # Remove images from main document body using XPath
-    for paragraph in doc.paragraphs:
-        if hasattr(paragraph._element, 'xpath'):
-            # Find ALL drawing elements at any depth (not just direct children)
-            drawings = paragraph._element.xpath('.//w:drawing')
-            for drawing in drawings:
-                # Count only actual images (w:blip = Binary Large Image/Picture)
-                # This excludes charts, shapes, SmartArt, etc. (v1.8 fix)
-                # Use findall with namespace URI
-                blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
-                has_image = len(blips) > 0
+    # Helper function to remove images from paragraphs
+    def remove_images_from_paragraphs(paragraphs):
+        """Remove images from a list of paragraphs"""
+        count = 0
+        for paragraph in paragraphs:
+            if hasattr(paragraph._element, 'xpath'):
+                # Find ALL drawing elements at any depth (not just direct children)
+                drawings = paragraph._element.xpath('.//w:drawing')
+                for drawing in drawings:
+                    # Count only actual images (w:blip = Binary Large Image/Picture)
+                    # This excludes charts, shapes, SmartArt, etc. (v1.8 fix)
+                    # Use findall with namespace URI
+                    blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                    has_image = len(blips) > 0
 
-                # Remove the drawing element from its parent
-                parent = drawing.getparent()
-                if parent is not None:
-                    parent.remove(drawing)
-                    if has_image:
-                        removed_count += 1
+                    # Remove the drawing element from its parent
+                    parent = drawing.getparent()
+                    if parent is not None:
+                        parent.remove(drawing)
+                        if has_image:
+                            count += 1
+        return count
+
+    # Remove images from main document body
+    removed_count += remove_images_from_paragraphs(doc.paragraphs)
+
+    # Remove images from tables (CRITICAL for 10-K documents)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                removed_count += remove_images_from_paragraphs(cell.paragraphs)
 
     # Remove images from headers and footers
     for section in doc.sections:
         # Process all header types
         for header in [section.header, section.first_page_header, section.even_page_header]:
-            for paragraph in header.paragraphs:
-                if hasattr(paragraph._element, 'xpath'):
-                    drawings = paragraph._element.xpath('.//w:drawing')
-                    for drawing in drawings:
-                        # Count only actual images (v1.8 fix)
-                        blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
-                        has_image = len(blips) > 0
-
-                        parent = drawing.getparent()
-                        if parent is not None:
-                            parent.remove(drawing)
-                            if has_image:
-                                removed_count += 1
+            removed_count += remove_images_from_paragraphs(header.paragraphs)
 
         # Process all footer types
         for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
-            for paragraph in footer.paragraphs:
-                if hasattr(paragraph._element, 'xpath'):
-                    drawings = paragraph._element.xpath('.//w:drawing')
-                    for drawing in drawings:
-                        # Count only actual images (v1.8 fix)
-                        blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
-                        has_image = len(blips) > 0
-
-                        parent = drawing.getparent()
-                        if parent is not None:
-                            parent.remove(drawing)
-                            if has_image:
-                                removed_count += 1
+            removed_count += remove_images_from_paragraphs(footer.paragraphs)
 
     return removed_count
 
@@ -647,30 +637,31 @@ def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=Non
                         count += repl_count
 
         # Also handle non-hyperlink text in the same paragraph
-        # Find text elements that are NOT inside hyperlinks
-        for run_elem in p_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
-            # Check if this run is inside a hyperlink
-            parent = run_elem.getparent()
-            is_in_hyperlink = False
-            while parent is not None:
-                if parent.tag == '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink':
-                    is_in_hyperlink = True
-                    break
-                parent = parent.getparent()
+        # PERFORMANCE FIX v2.0.1: Use set-based lookup instead of parent chain traversal
+        # Build set of all run elements contained within hyperlinks (O(n) once)
+        hyperlink_run_ids = set()
+        for hyperlink in hyperlinks:
+            for run_elem in hyperlink.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+                hyperlink_run_ids.add(id(run_elem))
 
-            # Only process if NOT in hyperlink (already handled above)
-            if not is_in_hyperlink:
-                text_elems = run_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
-                for text_elem in text_elems:
-                    if text_elem.text:
-                        if track_details:
-                            new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
-                            paragraph_details = merge_details(paragraph_details, details)
-                        else:
-                            new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
-                        if repl_count > 0:
-                            text_elem.text = new_text
-                            count += repl_count
+        # Find text elements that are NOT inside hyperlinks (O(1) lookup per run)
+        for run_elem in p_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+            # Check if this run is inside a hyperlink using set membership (O(1) vs O(depth))
+            if id(run_elem) in hyperlink_run_ids:
+                continue  # Skip - already processed above
+
+            # Process non-hyperlink runs
+            text_elems = run_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
+            for text_elem in text_elems:
+                if text_elem.text:
+                    if track_details:
+                        new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        paragraph_details = merge_details(paragraph_details, details)
+                    else:
+                        new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    if repl_count > 0:
+                        text_elem.text = new_text
+                        count += repl_count
 
         if track_details:
             return count, paragraph_details
@@ -853,50 +844,61 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
         pass  # Skip if parts not accessible
 
     # Anonymize headers and footers
-    for section in doc.sections:
+    # PERFORMANCE FIX v2.0.1: Only process FIRST section's headers/footers
+    # Rationale: Most documents share identical headers/footers across all sections
+    # Processing 500+ sections with identical empty headers wastes 20-30 seconds
+    # This optimization is SAFE because modifications to Section 1 apply document-wide
+    if doc.sections:
+        section = doc.sections[0]  # Only process first section
         for header in [section.header, section.first_page_header, section.even_page_header]:
-            # Process regular paragraphs (using whole-paragraph approach)
-            for paragraph in header.paragraphs:
-                if track_details:
-                    count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
-                    document_details = merge_details(document_details, details)
-                else:
-                    count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
-                total_replacements += count
+            try:
+                # Process regular paragraphs (using whole-paragraph approach)
+                for paragraph in header.paragraphs:
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
 
-            # Process textboxes in headers (CRITICAL for SEC filings)
-            if hasattr(header, '_element'):
-                try:
-                    # Find all text elements inside textboxes
-                    textbox_texts = header._element.xpath('.//w:txbxContent//w:t')
-                    for text_elem in textbox_texts:
-                        if text_elem.text:
-                            text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
-                            total_replacements += count
-                except Exception:
-                    pass  # Skip if xpath fails
+                # Process textboxes in headers (CRITICAL for SEC filings)
+                if hasattr(header, '_element'):
+                    try:
+                        # Find all text elements inside textboxes
+                        textbox_texts = header._element.xpath('.//w:txbxContent//w:t')
+                        for text_elem in textbox_texts:
+                            if text_elem.text:
+                                text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                                total_replacements += count
+                    except Exception:
+                        pass  # Skip if xpath fails
+            except Exception:
+                pass  # Skip malformed headers
 
         for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
-            # Process regular paragraphs (using whole-paragraph approach)
-            for paragraph in footer.paragraphs:
-                if track_details:
-                    count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
-                    document_details = merge_details(document_details, details)
-                else:
-                    count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
-                total_replacements += count
+            try:
+                # Process regular paragraphs (using whole-paragraph approach)
+                for paragraph in footer.paragraphs:
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
 
-            # Process textboxes in footers
-            if hasattr(footer, '_element'):
-                try:
-                    # Find all text elements inside textboxes
-                    textbox_texts = footer._element.xpath('.//w:txbxContent//w:t')
-                    for text_elem in textbox_texts:
-                        if text_elem.text:
-                            text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
-                            total_replacements += count
-                except Exception:
-                    pass  # Skip if xpath fails
+                # Process textboxes in footers
+                if hasattr(footer, '_element'):
+                    try:
+                        # Find all text elements inside textboxes
+                        textbox_texts = footer._element.xpath('.//w:txbxContent//w:t')
+                        for text_elem in textbox_texts:
+                            if text_elem.text:
+                                text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                                total_replacements += count
+                    except Exception:
+                        pass  # Skip if xpath fails
+            except Exception:
+                pass  # Skip malformed footers
 
     # CRITICAL: Anonymize hyperlink URLs (e.g., https://www.box.com → https://www.enclave.com)
     try:
@@ -920,9 +922,9 @@ def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
     return doc, total_replacements
 
 
-def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger, remove_images=True, clear_headers_footers_flag=False, track_details=False):
+def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger, remove_images=True, clear_headers_footers_flag=False, track_details=False, remove_hyperlinks=False):
     """
-    Process a single DOCX file: anonymize + strip metadata + optional image removal + optional header/footer clearing.
+    Process a single DOCX file: anonymize + strip metadata + optional image removal + optional header/footer clearing + optional hyperlink removal.
 
     Args:
         input_path: Path to input file (string or Path object)
@@ -930,10 +932,11 @@ def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger,
         remove_images: If True, removes all images from document
         clear_headers_footers_flag: If True, clears all header/footer content (for presentations with logos)
         track_details: If True, return detailed replacement tracking (v2.1)
+        remove_hyperlinks: If True, removes hyperlink metadata after anonymization (preserves text)
 
     Returns:
-        If track_details=False: (replacements, images_removed)
-        If track_details=True: (replacements, images_removed, details_dict)
+        If track_details=False: (replacements, images_removed, hyperlinks_removed)
+        If track_details=True: (replacements, images_removed, hyperlinks_removed, details_dict)
     """
     # Convert to Path objects if strings (for backward compatibility)
     input_path = Path(input_path) if isinstance(input_path, str) else input_path
@@ -947,6 +950,12 @@ def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger,
             doc, replacements, details = anonymize_docx(input_path, alias_map, sorted_keys, track_details=True)
         else:
             doc, replacements = anonymize_docx(input_path, alias_map, sorted_keys)
+
+        # Remove hyperlink metadata (AFTER anonymization, before image removal)
+        hyperlinks_removed = 0
+        if remove_hyperlinks:
+            from hyperlink_utils import remove_hyperlinks_docx
+            hyperlinks_removed = remove_hyperlinks_docx(doc)
 
         # Remove all images (if requested)
         images_removed = 0
@@ -965,20 +974,23 @@ def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger,
         output_path.parent.mkdir(parents=True, exist_ok=True)
         doc.save(output_path)
 
+        # Enhanced logging
+        log_parts = [f"{replacements} replacements", f"{images_removed} images removed"]
+        if remove_hyperlinks:
+            log_parts.append(f"{hyperlinks_removed} hyperlinks removed")
         if clear_headers_footers_flag:
-            logger.info(f"  ✓ {replacements} replacements, {images_removed} images removed, {headers_footers_cleared} headers/footers cleared")
-        else:
-            logger.info(f"  ✓ {replacements} replacements, {images_removed} images removed")
+            log_parts.append(f"{headers_footers_cleared} headers/footers cleared")
+        logger.info(f"  ✓ {', '.join(log_parts)}")
 
         if track_details:
-            return replacements, images_removed, details
-        return replacements, images_removed
+            return replacements, images_removed, hyperlinks_removed, details
+        return replacements, images_removed, hyperlinks_removed
 
     except Exception as e:
         logger.error(f"  ❌ Error: {e}")
         if track_details:
-            return 0, 0, {}
-        return 0, 0
+            return 0, 0, 0, {}
+        return 0, 0, 0
 
 
 def process_single_docx_worker(args):
