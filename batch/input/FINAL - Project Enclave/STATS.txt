@@ -1,0 +1,76 @@
+================================================================================
+VDR ANONYMIZATION - DETAILED STATISTICS
+================================================================================
+
+Project: ProjectEnclave
+Timestamp: 2025-11-08 09:05:01
+Input: /mnt/c/Users/vanbo/Development/Projects/xAI/anonymous/vdr-processor/input/full_dataroom/Enclave Corporation/Enclave Corp 11-04
+Output: /mnt/c/Users/vanbo/Development/Projects/xAI/anonymous/vdr-processor/output/full_dataroom/ProjectEnclave_final_20251108_083503
+
+FILE PROCESSING:
+--------------------------------------------------------------------------------
+Total files found: 227
+Successfully processed: 227
+Failed: 0
+Success rate: 100.0%
+
+REPLACEMENTS:
+--------------------------------------------------------------------------------
+Total replacements: 14670
+Unique terms replaced: 30
+
+Terms that were replaced:
+  - (877) 729-4269
+  - 1372612
+  - 900 Jefferson Ave.
+  - Aaron Levie
+  - Amit Walia
+  - BOX
+  - Bethany Mayer
+  - Box, Inc.
+  - Boxer
+  - Boxers
+  - Carl Bass
+  - Dan Levin
+  - Dana Evan
+  - David Leeb
+  - Dropbox
+  - Dylan Smith
+  - E-signature
+  - Eli Berkovitch
+  - Jack Lazar
+  - John Park
+  - Kimberly Hammonds
+  - Logo
+  - Olivia Nottebohm
+  - Peter Leav
+  - Redwood City
+  - Steve Murphy
+  - Sue Barsamian
+  - https://www.box.com/about
+  - www.box.com/investors
+  - www.boxinvestorrelations.com
+
+DATA INTEGRITY:
+--------------------------------------------------------------------------------
+Text insertion attempts: 14263
+  ✓ Successful: 14263 (100.0%)
+
+Duplicate Prevention:
+  ✓ Prevented 9173 potential duplicate insertions
+
+FONT ADJUSTMENTS:
+--------------------------------------------------------------------------------
+Font size adjustments: 8365
+(Font sizes reduced when replacement text was longer)
+
+ALIAS MAPPINGS LOADED:
+--------------------------------------------------------------------------------
+Total mappings: 57
+(Longest phrases processed first)
+
+NOTES:
+--------------------------------------------------------------------------------
+✓ All text insertions successful
+
+================================================================================

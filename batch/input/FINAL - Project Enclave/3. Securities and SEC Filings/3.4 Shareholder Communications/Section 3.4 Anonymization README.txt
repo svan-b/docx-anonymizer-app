@@ -1,0 +1,11 @@
+Section 3.4: Anonymization README
+
+Maria Briski  
+
+All of the documents in this section are directly from Enclave.  
+
+After compiling all information for this section, I found any possible identifiers, no matter how small. These are cataloged in total in the file "Section 3.4_Box Identifiers." 
+
+I then took the total population of possible identifiers and mapped them against the critical identifiers in the "Anonymization_Tracker_Enclave.docx" listed under "AGREED ALIASES." 
+
+All files in this directory are PDF, anonymization remains outstanding.   

@@ -1,0 +1,1119 @@
+#!/usr/bin/env python3
+"""
+Process Adobe-converted DOCX files for anonymization.
+
+This script is designed for the workflow:
+1. Adobe Acrobat: PDF → DOCX (batch conversion)
+2. This script: Anonymize + Strip Metadata + Remove Images
+3. Adobe Acrobat: DOCX → PDF (batch conversion back)
+
+Usage:
+    python3 process_adobe_word_files.py \\
+        --input path/to/adobe_converted_docx/ \\
+        --output path/to/anonymized_docx/
+
+The script will:
+- Apply all 128 anonymization rules
+- Remove ALL embedded images/logos
+- Strip ALL metadata (author, company, title, etc.)
+- Preserve directory structure
+"""
+
+# CRITICAL FIX: Apply OOXML int() conversion patches BEFORE importing Document
+# Fixes: ValueError: invalid literal for int() with base 10: '19.5'
+# See: fix_ooxml_int_conversion.py for details
+from src.utils.fix_ooxml_int_conversion import apply_ooxml_patches
+apply_ooxml_patches()
+
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+import argparse
+import logging
+from multiprocessing import Pool, cpu_count
+
+# Excel and DOCX processing
+from openpyxl import load_workbook
+from docx import Document
+from src.utils.anonymizer_utils import anonymize_text as anonymize_text_shared, merge_details as merge_details_shared
+
+
+def strip_all_metadata(doc):
+    """
+    Strip ALL metadata from DOCX file - CRITICAL for anonymization.
+
+    Adobe's PDF → DOCX conversion PRESERVES metadata like:
+    - Author: "Shake Shack Inc."
+    - Company: "Shake Shack"
+    - Title: "Q1 2022 10-Q"
+
+    This function wipes ALL of it.
+    """
+    props = doc.core_properties
+
+    # Clear all identifying metadata
+    props.author = ""
+    props.last_modified_by = ""
+    props.title = ""
+    props.subject = ""
+    props.keywords = ""
+    props.comments = ""
+    props.category = ""
+    props.content_status = ""
+    props.identifier = ""
+    props.language = ""
+
+    # Clear company (BIG ONE for SEC filings)
+    if hasattr(props, 'company'):
+        props.company = ""
+
+    # Clear creator/application info
+    props.creator = ""
+
+    # Reset version/revision
+    props.revision = 1
+    if hasattr(props, 'version'):
+        props.version = None
+
+    # Optionally clear dates (keeps last_modified as save time)
+    # props.created = None
+    # props.modified = None
+    # props.last_printed = None
+
+    return doc
+
+
+def remove_all_images(doc):
+    """
+    Remove ALL embedded images from DOCX (logos, watermarks, charts).
+
+    FIXED v1.8: Now counts only actual picture images (w:blip), not charts/shapes.
+    Previous versions counted all w:drawing elements (charts, SmartArt, shapes).
+
+    Images are found in:
+    - Inline shapes in paragraphs (nested in drawing elements)
+    - Tables (all cells) - CRITICAL for 10-K documents
+    - Headers (all sections)
+    - Footers (all sections)
+    """
+    removed_count = 0
+
+    # Helper function to remove images from paragraphs
+    def remove_images_from_paragraphs(paragraphs):
+        """Remove images from a list of paragraphs"""
+        count = 0
+        for paragraph in paragraphs:
+            if hasattr(paragraph._element, 'xpath'):
+                # Find ALL drawing elements at any depth (not just direct children)
+                drawings = paragraph._element.xpath('.//w:drawing')
+                for drawing in drawings:
+                    # Count only actual images (w:blip = Binary Large Image/Picture)
+                    # This excludes charts, shapes, SmartArt, etc. (v1.8 fix)
+                    # Use findall with namespace URI
+                    blips = drawing.findall('.//{http://schemas.openxmlformats.org/drawingml/2006/main}blip')
+                    has_image = len(blips) > 0
+
+                    # Remove the drawing element from its parent
+                    parent = drawing.getparent()
+                    if parent is not None:
+                        parent.remove(drawing)
+                        if has_image:
+                            count += 1
+        return count
+
+    # Remove images from main document body
+    removed_count += remove_images_from_paragraphs(doc.paragraphs)
+
+    # Remove images from tables (CRITICAL for 10-K documents)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                removed_count += remove_images_from_paragraphs(cell.paragraphs)
+
+    # Remove images from headers and footers
+    for section in doc.sections:
+        # Process all header types
+        for header in [section.header, section.first_page_header, section.even_page_header]:
+            removed_count += remove_images_from_paragraphs(header.paragraphs)
+
+        # Process all footer types
+        for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+            removed_count += remove_images_from_paragraphs(footer.paragraphs)
+
+    return removed_count
+
+
+def clear_headers_footers(doc):
+    """
+    Clear all content from headers and footers while preserving structure.
+
+    Use case: Investor presentations with company logos in headers/footers.
+    This removes the logo/text content but keeps body images intact.
+
+    Clears:
+    - All header types (default, first page, even page)
+    - All footer types (default, first page, even page)
+    - Text and tables within headers/footers
+    """
+    cleared_count = 0
+
+    for section in doc.sections:
+        # Clear all header types
+        for header in [section.header, section.first_page_header, section.even_page_header]:
+            # Clear all paragraphs in header
+            for paragraph in header.paragraphs:
+                if paragraph.text.strip():  # Only count non-empty
+                    cleared_count += 1
+                paragraph.clear()
+
+            # Clear all tables in header
+            for table in header.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            if paragraph.text.strip():
+                                cleared_count += 1
+                            paragraph.clear()
+
+        # Clear all footer types
+        for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+            # Clear all paragraphs in footer
+            for paragraph in footer.paragraphs:
+                if paragraph.text.strip():  # Only count non-empty
+                    cleared_count += 1
+                paragraph.clear()
+
+            # Clear all tables in footer
+            for table in footer.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            if paragraph.text.strip():
+                                cleared_count += 1
+                            paragraph.clear()
+
+    return cleared_count
+
+
+def load_aliases_from_excel(excel_path):
+    """
+    Load anonymization mappings from Excel file.
+    Reuses exact logic from vdr_anonymizer_final.py
+    """
+    # SECURITY: Validate Excel file can be loaded
+    try:
+        wb = load_workbook(excel_path, data_only=True)
+    except Exception as e:
+        raise ValueError(f"Invalid or corrupted Excel file: {e}")
+
+    # Find the correct sheet (flexible detection)
+    sheet = None
+    for sheet_name in wb.sheetnames:
+        if any(keyword in sheet_name.lower() for keyword in ['tracker', 'anonymization', 'mapping', 'aliases']):
+            sheet = wb[sheet_name]
+            break
+
+    if sheet is None:
+        sheet = wb.active
+
+    # Find columns
+    header_row = None
+    for row in sheet.iter_rows(max_row=10):
+        cell_values = [str(cell.value).lower() if cell.value else '' for cell in row]
+        # Support both "Before/After" and "Original/Replacement" formats
+        if any('original' in val or 'real' in val or 'actual' in val or 'before' in val for val in cell_values):
+            header_row = row
+            break
+
+    if not header_row:
+        raise ValueError("Could not find header row in Excel file")
+
+    # Identify columns
+    original_col = None
+    replacement_col = None
+
+    for idx, cell in enumerate(header_row):
+        val = str(cell.value).lower() if cell.value else ''
+        # Support both "Before" and "Original" for source column
+        if 'original' in val or 'real' in val or 'actual' in val or 'before' in val:
+            original_col = idx
+        # Support both "After" and "Replacement" for target column
+        elif 'replacement' in val or 'anonymized' in val or 'alias' in val or 'after' in val:
+            replacement_col = idx
+
+    if original_col is None or replacement_col is None:
+        raise ValueError("Could not identify original and replacement columns")
+
+    # Load mappings
+    alias_map = {}
+    for row in sheet.iter_rows(min_row=header_row[0].row + 1):
+        original = row[original_col].value
+        replacement = row[replacement_col].value
+
+        # CRITICAL: Allow blank "After" values for deletion/removal
+        # If After is blank, we replace with empty string (removes the text)
+        if original is not None:
+            original = str(original).strip()
+
+            # BUG FIX: Normalize numeric values stored as floats (e.g., 91301.0 → 91301)
+            # Excel often stores integers as floats, causing mismatch with document text
+            if original.endswith('.0') and original[:-2].replace('-', '').replace('(', '').replace(')', '').replace(' ', '').isdigit():
+                original = original[:-2]
+
+            if original:  # Only check original is not empty
+                # Handle None or blank replacement as empty string (deletion)
+                if replacement is None or str(replacement).strip() == "":
+                    alias_map[original] = ""
+                else:
+                    replacement_str = str(replacement).strip()
+                    # BUG FIX: Also normalize replacement values
+                    if replacement_str.endswith('.0') and replacement_str[:-2].replace('-', '').replace('(', '').replace(')', '').replace(' ', '').isdigit():
+                        replacement_str = replacement_str[:-2]
+                    alias_map[original] = replacement_str
+
+    # Generate reverse names for Form 4 (LastName FirstName format)
+    additional_mappings = {}
+    for original, replacement in alias_map.items():
+        # Check if it's a person name format (FirstName LastName)
+        if ' ' in original and len(original.split()) == 2:
+            first, last = original.split()
+            # Generate reverse format
+            reverse_original = f"{last} {first}"
+            if reverse_original not in alias_map:
+                # Generate reverse replacement
+                if ' ' in replacement and len(replacement.split()) == 2:
+                    rep_first, rep_last = replacement.split()
+                    additional_mappings[reverse_original] = f"{rep_last} {rep_first}"
+
+    alias_map.update(additional_mappings)
+
+    # CRITICAL FIX: Strip common suffixes to create base name mappings
+    # This handles cases like:
+    # - "Aaron Levie, CEO" exists but document contains just "Aaron Levie"
+    # - "Dutch Bros Inc." exists but document contains just "Dutch Bros"
+    suffix_mappings = {}
+
+    # Executive title suffixes
+    executive_suffixes = [', CEO', ', CFO', ', COO', ', CTO', ', Chief Executive Officer',
+                         ', Chief Financial Officer', ', Chief Operating Officer',
+                         ', Chief Technology Officer', ', Chief Legal Officer',
+                         ', Vice President', ', Director', ', President',
+                         ', Chief Accounting Officer and Controller',
+                         ', Chief Legal Officer & Corporate Secretary']
+
+    # Company suffixes
+    company_suffixes = [' Inc.', ' Corp.', ' Corporation', ' LLC', ' L.L.C.',
+                       ' Ltd.', ' Limited', ' Co.', ' Company']
+
+    all_suffixes = executive_suffixes + company_suffixes
+
+    for original, replacement in alias_map.items():
+        for suffix in all_suffixes:
+            if original.endswith(suffix):
+                # Create base name mapping
+                base_original = original[:-len(suffix)]
+
+                # Only add if base name doesn't already exist
+                if base_original not in alias_map and base_original not in suffix_mappings:
+                    # Try to strip same suffix from replacement
+                    if replacement.endswith(suffix):
+                        base_replacement = replacement[:-len(suffix)]
+                    else:
+                        # Replacement might have different format, keep as is
+                        base_replacement = replacement
+
+                    suffix_mappings[base_original] = base_replacement
+
+    alias_map.update(suffix_mappings)
+
+    # VALIDATION: Ensure at least one mapping was found
+    if not alias_map:
+        raise ValueError("No valid anonymization mappings found in Excel file. Please check that your tracker has 'Original' and 'Replacement' columns with data.")
+
+    return alias_map
+
+
+def categorize_and_sort_aliases(alias_map):
+    """
+    Bulletproof 3-tier sorting to prevent cascading failures.
+
+    Processing order:
+    1. Company names with suffixes (Inc., Corp., LLC, etc.)
+    2. Multi-word phrases
+    3. Single words and tickers
+
+    Within each tier: longest first
+    """
+    company_suffixes = ['Inc.', 'Corp.', 'Corporation', 'LLC', 'L.L.C.', 'Ltd.', 'Limited', 'Co.', 'Company']
+
+    tier1_company = []  # Company names
+    tier2_multiword = []  # Multi-word phrases
+    tier3_single = []  # Single words/tickers
+
+    for original in alias_map.keys():
+        # Tier 1: Company names with suffixes
+        if any(suffix in original for suffix in company_suffixes):
+            tier1_company.append(original)
+        # Tier 2: Multi-word phrases
+        elif ' ' in original:
+            tier2_multiword.append(original)
+        # Tier 3: Single words/tickers
+        else:
+            tier3_single.append(original)
+
+    # Sort each tier by length (longest first)
+    tier1_company.sort(key=len, reverse=True)
+    tier2_multiword.sort(key=len, reverse=True)
+    tier3_single.sort(key=len, reverse=True)
+
+    # Combine in order
+    sorted_keys = tier1_company + tier2_multiword + tier3_single
+
+    return sorted_keys
+
+
+def precompile_patterns(alias_map):
+    """
+    Pre-compile a SINGLE combined regex pattern for all replacements.
+
+    PERFORMANCE OPTIMIZATION v2.1: Instead of 367 separate regex passes,
+    we combine all patterns into ONE: (pattern1|pattern2|...|pattern367)
+
+    This reduces operations from O(n*m) to O(n):
+    - OLD: 5000 paragraphs × 367 patterns = 1,835,000 operations
+    - NEW: 5000 paragraphs × 1 combined pattern = 5,000 operations
+
+    Result: 367x speedup on large documents (4 minutes → <1 second)
+
+    BUG FIX v1.6: Smart word boundaries that handle special characters correctly
+    - Normal words: Use \b word boundaries
+    - Numbers/special chars: Use lookaround assertions instead
+    """
+    import re
+
+    # Handle empty alias map (edge case)
+    if not alias_map:
+        return {
+            'combined': None,
+            'lookup': {},
+            'sorted_keys': []
+        }
+
+    # Sort patterns by length (longest first) to avoid partial matches
+    # Example: "Netflix Inc" should match before "Netflix"
+    sorted_originals = sorted(alias_map.keys(), key=len, reverse=True)
+
+    def smart_boundary(pattern):
+        """
+        Add smart word boundaries that work with special characters.
+
+        Traditional \b fails with:
+        - Phone numbers: (818) 871-3000 - parens break boundary
+        - Numbers: 91301 - may need boundary but \b not always reliable
+        - Emails: test@example.com - @ breaks boundary
+
+        Solution: Use lookaround assertions that check for:
+        - Start of string OR non-alphanumeric character before
+        - End of string OR non-alphanumeric character after
+        """
+        escaped = re.escape(pattern)
+
+        # Check if pattern starts/ends with word characters
+        starts_with_word_char = pattern[0].isalnum() if pattern else False
+        ends_with_word_char = pattern[-1].isalnum() if pattern else False
+
+        # Build boundary pattern
+        left_boundary = r'(?<![a-zA-Z0-9])' if starts_with_word_char else ''
+        right_boundary = r'(?![a-zA-Z0-9])' if ends_with_word_char else ''
+
+        return left_boundary + escaped + right_boundary
+
+    # Build combined pattern with smart boundaries
+    escaped_patterns = [smart_boundary(original) for original in sorted_originals]
+    combined_pattern = '(' + '|'.join(escaped_patterns) + ')'
+
+    # Compile combined pattern (case-insensitive)
+    compiled = re.compile(combined_pattern, re.IGNORECASE)
+
+    # Create reverse lookup map: lowercase original → (actual original, replacement)
+    # This allows us to find the right replacement when a match is found
+    lookup = {}
+    for original, replacement in alias_map.items():
+        lookup[original.lower()] = (original, replacement)
+
+    return {
+        'combined': compiled,
+        'lookup': lookup,
+        'sorted_keys': sorted_originals  # For backward compatibility
+    }
+
+
+def anonymize_text(text, alias_map, sorted_keys, compiled_patterns=None, track_details=False):
+    """
+    Apply anonymization replacements with case matching using SINGLE-PASS regex (v2.1).
+
+    Args:
+        compiled_patterns: Dict with 'combined' pattern and 'lookup' map
+        track_details: If True, return dict tracking which originals were replaced (v2.1)
+
+    Returns:
+        If track_details=False: (text, replacements)
+        If track_details=True: (text, replacements, details_dict)
+    """
+    replacements = 0
+    import re
+
+    # If patterns not pre-compiled, compile them now (fallback for backward compatibility)
+    if compiled_patterns is None:
+        compiled_patterns = precompile_patterns(alias_map)
+
+    # Extract combined pattern and lookup map
+    combined_pattern = compiled_patterns.get('combined')
+    lookup = compiled_patterns.get('lookup')
+
+    # BACKWARD COMPATIBILITY: Handle old compiled_patterns format (dict of individual patterns)
+    if combined_pattern is None or lookup is None:
+        # Old format detected - use legacy multi-pass algorithm
+        result = anonymize_text_legacy(text, alias_map, sorted_keys, compiled_patterns)
+        if track_details:
+            return result[0], result[1], {}  # Return empty details for legacy
+        return result
+
+    # Track which originals were replaced (v2.1 feature)
+    details = {} if track_details else None
+
+    # SINGLE-PASS REPLACEMENT (v2.1 performance optimization)
+    def replace_match(match):
+        nonlocal replacements
+        matched_text = match.group(0)
+
+        # Look up the replacement using lowercase match
+        matched_lower = matched_text.lower()
+        if matched_lower not in lookup:
+            return matched_text  # Should never happen, but safe fallback
+
+        original, replacement = lookup[matched_lower]
+
+        # Track this replacement (v2.1)
+        if track_details:
+            details[original] = details.get(original, 0) + 1
+
+        # Preserve case pattern
+        if matched_text.isupper():
+            replacements += 1
+            return replacement.upper()
+        elif matched_text.islower():
+            replacements += 1
+            return replacement.lower()
+        elif matched_text[0].isupper():
+            replacements += 1
+            return replacement.capitalize()
+        else:
+            replacements += 1
+            return replacement
+
+    # Single regex pass replaces ALL patterns at once
+    text = combined_pattern.sub(replace_match, text)
+
+    if track_details:
+        return text, replacements, details
+    return text, replacements
+
+
+def merge_details(details1, details2):
+    """
+    Merge two replacement details dictionaries (v2.1 helper).
+
+    Args:
+        details1: First details dict {original: count, ...}
+        details2: Second details dict to merge in
+
+    Returns:
+        Merged details dict
+    """
+    if details1 is None:
+        return details2 if details2 else {}
+    if details2 is None:
+        return details1
+
+    merged = details1.copy()
+    for original, count in details2.items():
+        merged[original] = merged.get(original, 0) + count
+    return merged
+
+
+def anonymize_text_legacy(text, alias_map, sorted_keys, compiled_patterns):
+    """
+    Legacy multi-pass anonymization (kept for backward compatibility).
+
+    This is the OLD algorithm that does 367 separate regex passes.
+    Only used if compiled_patterns is in old format (dict of individual patterns).
+    """
+    replacements = 0
+
+    for original in sorted_keys:
+        replacement = alias_map[original]
+
+        # Case-sensitive replacement with case matching
+        def replace_with_case(match):
+            nonlocal replacements
+            matched_text = match.group(0)
+
+            # Preserve case pattern
+            if matched_text.isupper():
+                replacements += 1
+                return replacement.upper()
+            elif matched_text.islower():
+                replacements += 1
+                return replacement.lower()
+            elif matched_text[0].isupper():
+                replacements += 1
+                return replacement.capitalize()
+            else:
+                replacements += 1
+                return replacement
+
+        # Use pre-compiled pattern
+        pattern = compiled_patterns[original]
+        text = pattern.sub(replace_with_case, text)
+
+    return text, replacements
+
+
+def anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns=None, track_details=False):
+    """
+    Anonymize a single paragraph, handling text that spans multiple runs.
+
+    CRITICAL: Word documents often split text across multiple runs even when
+    it appears contiguous. For example, "Aaron Levie" might be stored as:
+      Run 0: "Aaron"
+      Run 1: " "
+      Run 2: "Levie"
+
+    Processing each run individually would fail to match "Aaron Levie".
+    This function processes the full paragraph text, then rebuilds runs.
+
+    SPECIAL HANDLING: Preserves hyperlinks by anonymizing text within hyperlink
+    XML elements rather than destroying the entire structure.
+
+    PERFORMANCE: Accepts pre-compiled regex patterns for 20-40% speedup.
+
+    Args:
+        track_details: If True, return detailed replacement tracking (v1.8)
+
+    Returns:
+        If track_details=False: count (int)
+        If track_details=True: (count, details_dict)
+    """
+    if not paragraph.text:
+        if track_details:
+            return 0, {}
+        return 0
+
+    # Track replacement details (v1.8 hotfix)
+    paragraph_details = {} if track_details else None
+
+    # Check if paragraph contains hyperlinks at XML level
+    p_elem = paragraph._element
+    hyperlinks = p_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}hyperlink')
+
+    # If there are hyperlinks, handle them specially to preserve structure
+    if hyperlinks:
+        count = 0
+        # Anonymize text within each hyperlink element without destroying it
+        for hyperlink in hyperlinks:
+            # Find all text elements within this hyperlink
+            text_elems = hyperlink.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
+            for text_elem in text_elems:
+                if text_elem.text:
+                    if track_details:
+                        new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        paragraph_details = merge_details(paragraph_details, details)
+                    else:
+                        new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    if repl_count > 0:
+                        text_elem.text = new_text
+                        count += repl_count
+
+        # Also handle non-hyperlink text in the same paragraph
+        # PERFORMANCE FIX v2.0.1: Use set-based lookup instead of parent chain traversal
+        # Build set of all run elements contained within hyperlinks (O(n) once)
+        hyperlink_run_ids = set()
+        for hyperlink in hyperlinks:
+            for run_elem in hyperlink.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+                hyperlink_run_ids.add(id(run_elem))
+
+        # Find text elements that are NOT inside hyperlinks (O(1) lookup per run)
+        for run_elem in p_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+            # Check if this run is inside a hyperlink using set membership (O(1) vs O(depth))
+            if id(run_elem) in hyperlink_run_ids:
+                continue  # Skip - already processed above
+
+            # Process non-hyperlink runs
+            text_elems = run_elem.findall('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t')
+            for text_elem in text_elems:
+                if text_elem.text:
+                    if track_details:
+                        new_text, repl_count, details = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        paragraph_details = merge_details(paragraph_details, details)
+                    else:
+                        new_text, repl_count = anonymize_text(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    if repl_count > 0:
+                        text_elem.text = new_text
+                        count += repl_count
+
+        if track_details:
+            return count, paragraph_details
+        return count
+
+    # No hyperlinks - use original approach (destroy and rebuild runs)
+    # Get full paragraph text and apply replacements
+    full_text = paragraph.text
+    if track_details:
+        new_text, count, details = anonymize_text(full_text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+        paragraph_details = merge_details(paragraph_details, details)
+    else:
+        new_text, count = anonymize_text(full_text, alias_map, sorted_keys, compiled_patterns)
+
+    # If no replacements, skip
+    if count == 0:
+        if track_details:
+            return 0, {}
+        return 0
+
+    # Replacement occurred - need to update the paragraph
+    # Simple approach: clear all runs and create one new run with the replaced text
+    # This loses per-character formatting but ensures complete replacement
+
+    # Save formatting from first run (if exists)
+    first_run_format = None
+    if paragraph.runs:
+        first_run = paragraph.runs[0]
+        first_run_format = {
+            'bold': first_run.bold,
+            'italic': first_run.italic,
+            'underline': first_run.underline,
+            'font_name': first_run.font.name if first_run.font else None,
+            'font_size': first_run.font.size if first_run.font else None,
+        }
+
+    # CRITICAL: Must completely remove runs from paragraph XML, not just clear text
+    # Clearing text leaves empty runs that can cause duplication
+    while len(paragraph.runs) > 0:
+        p = paragraph._element
+        p.remove(paragraph.runs[0]._element)
+
+    # Create new run with replaced text
+    new_run = paragraph.add_run(new_text)
+
+    # Restore formatting if we saved it
+    if first_run_format:
+        new_run.bold = first_run_format['bold']
+        new_run.italic = first_run_format['italic']
+        new_run.underline = first_run_format['underline']
+        if first_run_format['font_name']:
+            new_run.font.name = first_run_format['font_name']
+        if first_run_format['font_size']:
+            new_run.font.size = first_run_format['font_size']
+
+    if track_details:
+        return count, paragraph_details
+    return count
+
+
+def anonymize_docx(docx_path, alias_map, sorted_keys, track_details=False):
+    """
+    Anonymize all text in DOCX file (paragraphs, headers, footers, tables).
+    FIXED: Now handles text that spans multiple runs.
+
+    PERFORMANCE OPTIMIZED v2.1: Pre-compiles patterns into single regex for 367x speedup.
+
+    Args:
+        track_details: If True, return detailed replacement tracking (v2.1)
+
+    Returns:
+        If track_details=False: (doc, total_replacements)
+        If track_details=True: (doc, total_replacements, details_dict)
+    """
+    # DEBUG: Verify patch is active before opening Document
+    from docx.oxml import simpletypes
+    has_patch = hasattr(simpletypes.BaseIntType, '_original_convert_from_xml')
+    if not has_patch:
+        raise RuntimeError(f"OOXML patch not active when opening {docx_path}!")
+
+    doc = Document(docx_path)
+    total_replacements = 0
+    document_details = {} if track_details else None
+
+    # PERFORMANCE: Pre-compile all regex patterns ONCE (not millions of times)
+    compiled_patterns = precompile_patterns(alias_map)
+
+    # Create tracking wrapper for anonymize_text calls
+    def anonymize_with_tracking(text, alias_map, sorted_keys, compiled_patterns):
+        nonlocal document_details
+        if track_details:
+            new_text, count, details = anonymize_text(text, alias_map, sorted_keys, compiled_patterns, track_details=True)
+            document_details = merge_details(document_details, details)
+            return new_text, count
+        else:
+            return anonymize_text(text, alias_map, sorted_keys, compiled_patterns)
+
+    # Anonymize paragraphs (process as whole units, not individual runs)
+    for paragraph in doc.paragraphs:
+        if track_details:
+            count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+            document_details = merge_details(document_details, details)
+        else:
+            count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+        total_replacements += count
+
+    # Anonymize tables
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+
+    # CRITICAL FIX: Anonymize textboxes and shapes in main document body
+    # This was missing and caused "Matador" to appear in PDFs but not Word
+    if hasattr(doc, '_element'):
+        try:
+            # Find all text elements inside textboxes in the main body
+            textbox_texts = doc._element.xpath('.//w:txbxContent//w:t')
+            for text_elem in textbox_texts:
+                if text_elem.text:
+                    text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+
+            # Also handle VML textboxes (legacy format)
+            vml_textbox_texts = doc._element.xpath('.//v:textbox//w:t')
+            for text_elem in vml_textbox_texts:
+                if text_elem.text:
+                    text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+        except Exception:
+            pass  # Skip if xpath fails
+
+    # Anonymize footnotes and endnotes
+    try:
+        if hasattr(doc, 'part') and hasattr(doc.part, 'package'):
+            package = doc.part.package
+
+            # Process footnotes
+            try:
+                footnotes_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes')
+                if hasattr(footnotes_part, '_element'):
+                    footnote_texts = footnotes_part._element.xpath('.//w:t')
+                    for text_elem in footnote_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No footnotes or error accessing them
+
+            # Process endnotes
+            try:
+                endnotes_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes')
+                if hasattr(endnotes_part, '_element'):
+                    endnote_texts = endnotes_part._element.xpath('.//w:t')
+                    for text_elem in endnote_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No endnotes or error accessing them
+
+            # Process comments
+            try:
+                comments_part = package.part_related_by('http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments')
+                if hasattr(comments_part, '_element'):
+                    comment_texts = comments_part._element.xpath('.//w:t')
+                    for text_elem in comment_texts:
+                        if text_elem.text:
+                            text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                            total_replacements += count
+            except Exception:
+                pass  # No comments or error accessing them
+    except Exception:
+        pass  # Skip if parts not accessible
+
+    # Anonymize headers and footers
+    # PERFORMANCE FIX v2.0.1: Only process FIRST section's headers/footers
+    # Rationale: Most documents share identical headers/footers across all sections
+    # Processing 500+ sections with identical empty headers wastes 20-30 seconds
+    # This optimization is SAFE because modifications to Section 1 apply document-wide
+    if doc.sections:
+        section = doc.sections[0]  # Only process first section
+        for header in [section.header, section.first_page_header, section.even_page_header]:
+            try:
+                # Process regular paragraphs (using whole-paragraph approach)
+                for paragraph in header.paragraphs:
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+
+                # Process textboxes in headers (CRITICAL for SEC filings)
+                if hasattr(header, '_element'):
+                    try:
+                        # Find all text elements inside textboxes
+                        textbox_texts = header._element.xpath('.//w:txbxContent//w:t')
+                        for text_elem in textbox_texts:
+                            if text_elem.text:
+                                text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                                total_replacements += count
+                    except Exception:
+                        pass  # Skip if xpath fails
+            except Exception:
+                pass  # Skip malformed headers
+
+        for footer in [section.footer, section.first_page_footer, section.even_page_footer]:
+            try:
+                # Process regular paragraphs (using whole-paragraph approach)
+                for paragraph in footer.paragraphs:
+                    if track_details:
+                        count, details = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns, track_details=True)
+                        document_details = merge_details(document_details, details)
+                    else:
+                        count = anonymize_paragraph(paragraph, alias_map, sorted_keys, compiled_patterns)
+                    total_replacements += count
+
+                # Process textboxes in footers
+                if hasattr(footer, '_element'):
+                    try:
+                        # Find all text elements inside textboxes
+                        textbox_texts = footer._element.xpath('.//w:txbxContent//w:t')
+                        for text_elem in textbox_texts:
+                            if text_elem.text:
+                                text_elem.text, count = anonymize_with_tracking(text_elem.text, alias_map, sorted_keys, compiled_patterns)
+                                total_replacements += count
+                    except Exception:
+                        pass  # Skip if xpath fails
+            except Exception:
+                pass  # Skip malformed footers
+
+    # CRITICAL: Anonymize hyperlink URLs (e.g., https://www.box.com → https://www.enclave.com)
+    try:
+        if hasattr(doc, 'part') and hasattr(doc.part, 'rels'):
+            rels = doc.part.rels
+            for rel_id, rel in rels.items():
+                # Check if this is a hyperlink relationship
+                if hasattr(rel, 'reltype') and 'hyperlink' in rel.reltype.lower():
+                    if hasattr(rel, '_target') and rel._target:
+                        original_url = rel._target
+                        # Apply text replacements to URL
+                        new_url, count = anonymize_with_tracking(original_url, alias_map, sorted_keys, compiled_patterns)
+                        if count > 0:
+                            rel._target = new_url
+                            total_replacements += count
+    except Exception:
+        pass  # Skip if hyperlink processing fails
+
+    if track_details:
+        return doc, total_replacements, document_details
+    return doc, total_replacements
+
+
+def process_single_docx(input_path, output_path, alias_map, sorted_keys, logger, remove_images=True, clear_headers_footers_flag=False, track_details=False, remove_hyperlinks=False):
+    """
+    Process a single DOCX file: anonymize + strip metadata + optional image removal + optional header/footer clearing + optional hyperlink removal.
+
+    Args:
+        input_path: Path to input file (string or Path object)
+        output_path: Path to output file (string or Path object)
+        remove_images: If True, removes all images from document
+        clear_headers_footers_flag: If True, clears all header/footer content (for presentations with logos)
+        track_details: If True, return detailed replacement tracking (v2.1)
+        remove_hyperlinks: If True, removes hyperlink metadata after anonymization (preserves text)
+
+    Returns:
+        If track_details=False: (replacements, images_removed, hyperlinks_removed)
+        If track_details=True: (replacements, images_removed, hyperlinks_removed, details_dict)
+    """
+    # Convert to Path objects if strings (for backward compatibility)
+    input_path = Path(input_path) if isinstance(input_path, str) else input_path
+    output_path = Path(output_path) if isinstance(output_path, str) else output_path
+
+    logger.info(f"Processing: {input_path.name}")
+
+    try:
+        # Load DOCX with optional tracking
+        if track_details:
+            doc, replacements, details = anonymize_docx(input_path, alias_map, sorted_keys, track_details=True)
+        else:
+            doc, replacements = anonymize_docx(input_path, alias_map, sorted_keys)
+
+        # Remove hyperlink metadata (AFTER anonymization, before image removal)
+        hyperlinks_removed = 0
+        if remove_hyperlinks:
+            from src.utils.hyperlink_utils import remove_hyperlinks_docx
+            hyperlinks_removed = remove_hyperlinks_docx(doc)
+
+        # Remove all images (if requested)
+        images_removed = 0
+        if remove_images:
+            images_removed = remove_all_images(doc)
+
+        # Clear headers/footers (if requested)
+        headers_footers_cleared = 0
+        if clear_headers_footers_flag:
+            headers_footers_cleared = clear_headers_footers(doc)
+
+        # Strip ALL metadata (CRITICAL)
+        doc = strip_all_metadata(doc)
+
+        # Save
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.save(output_path)
+
+        # Enhanced logging
+        log_parts = [f"{replacements} replacements", f"{images_removed} images removed"]
+        if remove_hyperlinks:
+            log_parts.append(f"{hyperlinks_removed} hyperlinks removed")
+        if clear_headers_footers_flag:
+            log_parts.append(f"{headers_footers_cleared} headers/footers cleared")
+        logger.info(f"  ✓ {', '.join(log_parts)}")
+
+        if track_details:
+            return replacements, images_removed, hyperlinks_removed, details
+        return replacements, images_removed, hyperlinks_removed
+
+    except Exception as e:
+        logger.error(f"  ❌ Error: {e}")
+        if track_details:
+            return 0, 0, 0, {}
+        return 0, 0, 0
+
+
+def process_single_docx_worker(args):
+    """
+    Worker function for multiprocessing pool.
+    Creates its own logger to avoid pickling issues.
+
+    Args:
+        args: Tuple of (docx_file, input_dir, output_dir, alias_map, sorted_keys, file_index, total_files)
+
+    Returns:
+        Tuple of (relative_path_str, replacements, images_removed)
+    """
+    docx_file, input_dir, output_dir, alias_map, sorted_keys, file_index, total_files = args
+
+    # Create logger for this worker
+    worker_logger = logging.getLogger(f"worker_{file_index}")
+
+    # Preserve directory structure
+    relative_path = docx_file.relative_to(input_dir)
+    output_path = output_dir / relative_path
+
+    # Log progress
+    worker_logger.info(f"[{file_index}/{total_files}] {relative_path}")
+
+    # Process the file
+    replacements, images = process_single_docx(
+        docx_file, output_path, alias_map, sorted_keys, worker_logger
+    )
+
+    return (str(relative_path), replacements, images)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Process Adobe-converted DOCX files for anonymization',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Example:
+  python3 process_adobe_word_files.py \\
+      --input ~/Desktop/adobe_converted/ \\
+      --output ../vdr-processor-docx/output/ \\
+      --aliases input/requirements/Anonymization_Tracker_Barista.xlsx
+        """
+    )
+
+    parser.add_argument('--input', required=True, help='Directory with Adobe-converted DOCX files')
+    parser.add_argument('--output', required=True, help='Output directory for anonymized DOCX files')
+    parser.add_argument('--aliases', default='input/requirements/Anonymization_Tracker_Barista.xlsx',
+                       help='Path to anonymization Excel file')
+
+    args = parser.parse_args()
+
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(message)s'
+    )
+    logger = logging.getLogger(__name__)
+
+    input_dir = Path(args.input)
+    output_dir = Path(args.output)
+    aliases_file = Path(args.aliases)
+
+    # Validate inputs
+    if not input_dir.exists():
+        logger.error(f"❌ Input directory not found: {input_dir}")
+        sys.exit(1)
+
+    if not aliases_file.exists():
+        logger.error(f"❌ Aliases file not found: {aliases_file}")
+        sys.exit(1)
+
+    # Load aliases
+    logger.info("Loading anonymization mappings...")
+    alias_map = load_aliases_from_excel(aliases_file)
+    sorted_keys = categorize_and_sort_aliases(alias_map)
+    logger.info(f"✓ Loaded {len(alias_map)} mappings\n")
+
+    # Find all DOCX files
+    docx_files = list(input_dir.rglob('*.docx'))
+
+    if not docx_files:
+        logger.error(f"❌ No DOCX files found in {input_dir}")
+        sys.exit(1)
+
+    logger.info(f"Found {len(docx_files)} DOCX files to process\n")
+    logger.info("="*80)
+
+    # PERFORMANCE OPTIMIZATION: Use multiprocessing for parallel file processing
+    # Determine optimal worker count (cap at 8 to avoid memory issues on 128GB system)
+    num_workers = min(cpu_count(), 8)
+    logger.info(f"Using {num_workers} parallel workers for {num_workers}x speedup\n")
+
+    # Prepare arguments for parallel processing
+    # Each worker gets: (docx_file, input_dir, output_dir, alias_map, sorted_keys, file_index, total_files)
+    worker_args = [
+        (docx_file, input_dir, output_dir, alias_map, sorted_keys, i, len(docx_files))
+        for i, docx_file in enumerate(docx_files, 1)
+    ]
+
+    # Process files in parallel
+    total_replacements = 0
+    total_images = 0
+
+    with Pool(num_workers) as pool:
+        # Map worker function across all files
+        results = pool.map(process_single_docx_worker, worker_args)
+
+    # Aggregate results
+    for relative_path_str, replacements, images in results:
+        total_replacements += replacements
+        total_images += images
+
+    # Summary
+    logger.info("="*80)
+    logger.info(f"\n✓ BATCH COMPLETE")
+    logger.info(f"  Files processed: {len(docx_files)}")
+    logger.info(f"  Total replacements: {total_replacements}")
+    logger.info(f"  Total images removed: {total_images}")
+    logger.info(f"\n📁 Output: {output_dir.absolute()}")
+    logger.info(f"\n📋 NEXT STEP: Use Adobe Acrobat to batch convert DOCX → PDF")
+
+
+if __name__ == '__main__':
+    main()

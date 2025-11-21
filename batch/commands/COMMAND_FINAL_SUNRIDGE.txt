@@ -1,0 +1,1 @@
+python3 batch_anonymize.py --input "input/Project Sunridge VDR" --output "output" --tracker "tracker/Anon Tracker - Sunridge.xlsx" --auto-no-images --remove-hyperlinks --timestamp-output --remove-images-from-folders "3. Securities & SEC Filings\3.1 10-K - 10-Q" --parallel-workers 6

@@ -1,0 +1,507 @@
+================================================================================
+MAPLE POINT HEALTH - TRANSFER PRICING & INTERCOMPANY DOCUMENTATION PACKAGE
+COMPLETE TRANSFER PRICING COMPLIANCE PACKAGE
+================================================================================
+
+PREPARED DATE: January 31, 2024
+EFFECTIVE DATE: January 1, 2024
+PREPARED BY: Transfer Pricing Consultant (External)
+REVIEWED BY: Chief Financial Officer, General Counsel
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+This comprehensive Transfer Pricing & Intercompany Documentation Package has been
+prepared to ensure full compliance with IRS transfer pricing requirements and to 
+support the Company during acquisition due diligence.
+
+KEY COMPONENTS:
+
+✓ Master Intercompany Services Agreement (MSA) - Executed with all clinic entities
+✓ Transfer Pricing Policy Document - Detailed policy with benchmarking support
+✓ Cost Allocation Manual - Step-by-step allocation methodology
+✓ Benchmarking Analysis - Comparable company study supporting 6% mark-up
+✓ Contemporaneous Documentation - Board minutes, memos, email chains, certifications
+✓ Cost Allocation Schedules - Sample monthly calculations and annual true-up
+
+TRANSFER PRICING METHODOLOGY:
+
+Method:         Cost Plus (TNMM - Transactional Net Margin Method)
+Mark-Up Rate:   6.0% (arm's length mark-up on centralized services)
+Pricing:        Direct Costs + (6% × Direct Costs)
+Effective:      January 1, 2024, ongoing
+
+COMPLIANCE STATUS: FULL - All documentation prepared contemporaneously and IRS-ready
+
+================================================================================
+DOCUMENT INVENTORY
+================================================================================
+
+FILE #1: Master Intercompany Services Agreement (MSA)
+─────────────────────────────────────────────────────────────────────────────
+Filename:       01_Master_Intercompany_Services_Agreement_ANONYMIZED.docx
+Pages:          ~15 pages
+Status:         EXECUTED by all parties (signatures obtained January 2024)
+Purpose:        Formal legal agreement documenting the provision of services
+Scope:          Defines service categories, pricing methodology, cost allocation,
+                payment terms, liability, confidentiality, termination provisions
+Parties:        Maple Point Management Services Co. (Service Provider) and 
+                62 Clinic Entities (Service Recipients)
+Key Terms:      Services charged at cost + 6% mark-up; monthly invoicing;
+                30-day payment terms; annual true-up reconciliation
+
+FILE #2: Transfer Pricing Policy Document
+─────────────────────────────────────────────────────────────────────────────
+Filename:       02_Transfer_Pricing_Policy_Document_ANONYMIZED.docx
+Pages:          ~25 pages
+Status:         APPROVED by Transfer Pricing Committee (January 15, 2024)
+Purpose:        Comprehensive transfer pricing policy documentation
+Scope:          Business description, functional analysis (FAR), transfer
+                pricing methodology rationale, benchmarking analysis, cost
+                allocation methodology, regulatory compliance framework,
+                risk assessment
+Content:        
+  • Section 1: Executive Summary
+  • Section 2: Business Description (company overview, structure, service model)
+  • Section 3: Functional Analysis (MPMSC functions/assets/risks, Clinic functions/assets/risks)
+  • Section 4: Transfer Pricing Methodology (selection rationale, Cost Plus method,
+    benchmarking support for 6% mark-up, cost allocation methodology)
+  • Section 5: Contemporaneous Documentation (enumeration of supporting docs)
+  • Section 6: Regulatory Compliance (IRC §482, Treasury Regs, OECD Guidelines)
+  • Section 7: Risk Assessment (strengths, risk areas, mitigation strategies)
+  • Section 8: Management Certification
+
+FILE #3: Contemporaneous Documentation Package
+─────────────────────────────────────────────────────────────────────────────
+Filename:       03_Contemporaneous_Documentation_Package_ANONYMIZED.docx
+Pages:          ~35 pages
+Status:         COMPLETED and Certified (January 31, 2024)
+Purpose:        Comprehensive documentation satisfying IRC §482 and Revenue
+                Procedure 98-34 contemporaneous documentation requirements
+Contents:
+  
+  Document 1: BOARD MEETING MINUTES (January 15, 2024)
+  ────────────────────────────────────
+  • Meeting of Transfer Pricing Committee
+  • Attendees: [CEO], [CFO], [COO], [CMO], [General Counsel], [External Consultant]
+  • Agenda items: Background on transfer pricing, benchmarking study review,
+    cost allocation methodology discussion, Q&A and committee resolution
+  • Resolutions passed: Approval of TP Policy, MSA, cost allocation methodology,
+    management authorization for ongoing compliance
+  • All action items documented with completion dates
+
+  Document 2: TRANSFER PRICING STUDY ENGAGEMENT MEMORANDUM (December 1, 2023)
+  ────────────────────────────────────
+  • Engagement letter from Transfer Pricing Consultant to Maple Point Health
+  • Scope of work: Benchmarking study, TP policy documentation, MSA review,
+    compliance support
+  • Project timeline and deliverables
+  • Preliminary findings and professional standards
+  • Engagement confirmation
+
+  Document 3: EMAIL CHAIN - TRANSFER PRICING DISCUSSION & APPROVAL
+  ────────────────────────────────────
+  • Email #1 (11/15/23): Initial kickoff with consultant and legal counsel
+  • Email #2 (12/20/23): Preliminary findings from benchmarking study
+  • Email #3 (1/15/24): Post-board approval and action item confirmation
+  • Email #4 (1/29/24): Final Transfer Pricing Study Report delivery
+  • Evidence of contemporaneous communication and approval process
+
+  Document 4: MANAGEMENT MEMORANDUM (January 10, 2024)
+  ────────────────────────────────────
+  • Memorandum from Chief Financial Officer to Transfer Pricing Committee
+  • Background on transfer pricing requirements
+  • Proposed transfer pricing methodology and rationale
+  • Benchmarking analysis highlights
+  • Implementation plan and compliance framework
+  • Management recommendations for approval
+
+FILE #4: Cost Allocation Schedules & Benchmarking Analysis
+─────────────────────────────────────────────────────────────────────────────
+Filename:       04_Cost_Allocation_Schedules.xlsx
+Sheets:         4 detailed worksheets with calculations
+Status:         TEMPLATES COMPLETED - Ready for monthly/annual use
+Purpose:        Detailed cost allocation methodology and supporting schedules
+
+SHEET 1: COST ALLOCATION MANUAL
+  • Detailed narrative description of cost allocation methodology
+  • For each cost category, defines:
+    - Cost pool scope and what costs are included
+    - Allocation driver (basis for distributing costs to clinics)
+    - Calculation methodology and formulas
+    - Data sources and timing
+  • Coverage: RCM, Clinical Operations, IT, HR, Finance, Marketing, Occupancy, D&A
+
+SHEET 2: SAMPLE COST ALLOCATION (February 2024)
+  • Real example of how costs are allocated to individual clinics
+  • Shows allocation for 7 sample clinics (IL, MI, IN, OH, PA, WI, MN)
+  • Demonstrates actual calculation using drivers and totals
+  • Includes 6% mark-up calculation
+  • Shows invoice amount = Allocated Costs × 1.06
+
+SHEET 3: BENCHMARKING SUMMARY
+  • 17 comparable healthcare MSOs with mark-up rates
+  • Statistical analysis: minimum, 25th percentile, median, mean, 75th percentile, maximum
+  • Interquartile range (IQR) analysis
+  • Selection justification for 6.0% mark-up (positioned at median, defensible)
+  • Regulatory compliance framework reference
+
+SHEET 4: ANNUAL TRUE-UP TEMPLATE
+  • Template for year-end reconciliation (March 31 annual true-up)
+  • Columns: Actual Costs, Invoiced Amount, Variance
+  • Shows calculation of net adjustment required
+  • Used to adjust for any overpayment or underpayment during the year
+  • Ensures allocation accuracy and compliance
+
+FILE #5: CFO Transfer Pricing Certification
+─────────────────────────────────────────────────────────────────────────────
+Filename:       05_CFO_Transfer_Pricing_Certification_ANONYMIZED.docx
+Pages:          ~2-3 pages
+Status:         SIGNED and DATED (January 31, 2024)
+Purpose:        Formal certification of transfer pricing methodology
+Contents:       
+  • Certification that transfer pricing policy is arm's length
+  • Certification of compliance with IRC §482 and Treasury Regulations
+  • Certification of contemporaneous documentation maintenance
+  • Certification that pricing has been applied consistently
+  • Certification under penalty of perjury
+  • Signature of Chief Financial Officer with certification date
+
+================================================================================
+TRANSFER PRICING OVERVIEW
+================================================================================
+
+INTERCOMPANY TRANSACTION TYPES:
+
+1. CENTRALIZED SERVICES (Primary Transaction)
+   ───────────────────────────────────────────
+   Service Provider: Maple Point Management Services Co. (MPMSC)
+   Recipients:      62 Clinic Entities across 7 states
+   Services:        Revenue Cycle Management, Clinical Operations, IT, HR,
+                    Finance & Admin, Marketing & Growth
+   Pricing:         Cost + 6% Mark-Up
+   Allocation:      Based on documented drivers (claims, patients, users, etc.)
+   Frequency:       Monthly invoicing with annual true-up
+   Documentation:   Cost accounting records, allocation schedules
+
+2. INTELLECTUAL PROPERTY LICENSING (Ancillary)
+   ──────────────────────────────────────────────
+   Licensor:        MPMSC
+   Licensees:       All Clinic Entities
+   IP Licensed:     EHR templates, care coordination algorithms, clinical
+                    protocols, brand assets
+   Royalty:         Included in 6% mark-up (no separate royalty)
+   Term:            Continuous during service agreement
+
+3. INTERCOMPANY LOANS (Growth Support)
+   ────────────────────────────────────
+   Lender:          MPMSC
+   Borrowers:       Clinic Entities opening new locations
+   Interest Rate:   6.25% fixed (arm's length rate for healthcare loans)
+   Term:            5 years or clinic IRR breakeven
+   Documentation:   Promissory notes, payment records
+
+================================================================================
+COMPLIANCE FRAMEWORK
+================================================================================
+
+REGULATORY REQUIREMENTS SATISFIED:
+
+✓ Internal Revenue Code (IRC) Section 482
+  "In any case of two or more organizations, trades, or businesses...which are
+   owned or controlled directly or indirectly by the same interests, the
+   Secretary may distribute...the gross income, deductions...between or among
+   such organizations..."
+  COMPLIANCE: All intercompany pricing reflects arm's length terms
+
+✓ Treasury Regulation Section 1.482-4 (Transfer Pricing Methods)
+  "The arm's length result of a controlled transaction under the best method rule
+   must be determined under the method that provides the most accurate
+   determination of an arm's length result."
+  COMPLIANCE: Cost Plus method selected as most appropriate; benchmarking supports
+
+✓ Treasury Regulation Section 1.482-7 (Documentation Requirements)
+  Contemporaneous documentation must include:
+  - Controlled transactions identification
+  - Functional analysis
+  - Economic analysis
+  - Transfer pricing method selection
+  - Benchmarking study support
+  COMPLIANCE: All elements documented
+
+✓ Revenue Procedure 98-34 (Contemporaneous Documentation Safe Harbor)
+  To qualify for safe harbor protection, documentation must be:
+  - Prepared or obtained contemporaneously with tax return
+  - Attached to or filed with tax return
+  - Demonstrates arm's length nature of prices
+  COMPLIANCE: Documentation prepared in January 2024 for FY 2024 tax return
+
+✓ OECD Transfer Pricing Guidelines (2022 Edition)
+  - Arm's length principle
+  - Transfer pricing methods (CUP, Cost Plus, Resale Price, Profit Split, TNMM)
+  - Documentation requirements
+  - Economic substance analysis
+  COMPLIANCE: All OECD principles applied to methodology selection
+
+✓ State Tax Authority Requirements
+  - Multi-state allocation and apportionment
+  - Related party transaction disclosure
+  - Reasonable compensation limits (if applicable)
+  COMPLIANCE: Policy supports state tax compliance
+
+================================================================================
+KEY FINANCIAL METRICS & SUPPORTING DATA
+================================================================================
+
+2024 PROJECTED INTERCOMPANY TRANSACTION VOLUMES:
+
+Service Fees (Cost + 6%):        $54,400,000 annually
+  • RCM/Claims Processing:       $15,000,000 direct + $900,000 mark-up
+  • Clinical Operations:         $10,200,000 direct + $612,000 mark-up
+  • Information Technology:      $7,800,000 direct + $468,000 mark-up
+  • Human Resources:             $5,400,000 direct + $324,000 mark-up
+  • Finance & Administration:    $4,575,000 direct + $274,500 mark-up
+  • Marketing & Growth:          $3,300,000 direct + $198,000 mark-up
+  • Occupancy & Facilities:      $5,100,000 direct + $306,000 mark-up
+  • Corporate Administration:    $2,625,000 direct + $157,500 mark-up
+
+IP Licensing Royalty:            $0 (included in mark-up)
+
+Intercompany Loan Interest:      ~$1,600,000 annually (at 6.25% on outstanding balances)
+
+TOTAL INTERCOMPANY VOLUME:       ~$56,000,000 annually
+
+================================================================================
+DOCUMENTATION RETENTION & MAINTENANCE
+================================================================================
+
+RECORD RETENTION POLICY:
+
+Documents Retained:              All transfer pricing documentation
+Retention Period:                Minimum 7 years (per IRS exam statute of limitations)
+Location:                        Corporate Headquarters, Finance Department
+Backup Copies:                   Digital copies maintained in secure file server
+Responsible Party:               Chief Financial Officer and Finance Department
+Access:                          Available for IRS examination or company audits
+
+ANNUAL UPDATES:
+
+Frequency:                       Annually (by January 31 following fiscal year-end)
+Process:                         
+  • Review actual costs vs. invoiced amounts
+  • Perform year-end true-up reconciliation
+  • Update benchmarking analysis (or engage external consultant annually)
+  • Document any changes in business model or service scope
+  • Certify compliance by Chief Financial Officer
+  • Present to Transfer Pricing Committee for review/approval
+
+Changes to Policy:               Any material changes in service scope, business
+                                model, or organizational structure must be reviewed
+                                for transfer pricing implications and documented
+
+================================================================================
+IRS AUDIT DEFENSE STRATEGY
+================================================================================
+
+EXAMINATION SCENARIOS & RESPONSE:
+
+Scenario 1: IRS Questions Whether 6% Mark-Up Is Arm's Length
+Response:   • Provide benchmarking study showing 3.5%-8.2% range
+            • Present comparable company database with peer group analysis
+            • Explain selection of median (6.0%) as conservative position
+            • Demonstrate that MPMSC functions align with comparables
+            • Show cost accounting records support allocation methodology
+
+Scenario 2: IRS Challenges Cost Allocation Methodology
+Response:   • Provide detailed Cost Allocation Manual with allocation drivers
+            • Submit contemporaneous documentation of cost pool definitions
+            • Show sample monthly invoices demonstrating consistent application
+            • Present allocation reconciliation to general ledger
+            • Demonstrate allocation drivers are objective and documented
+
+Scenario 3: IRS Requests Documentation of Arm's Length Negotiations
+Response:   • Provide Board meeting minutes showing Transfer Pricing Committee
+              review and approval
+            • Submit email chain documenting decision process
+            • Provide Management Memorandum explaining methodology rationale
+            • Present engagement letter and study report
+            • Provide certification of arm's length nature
+
+Scenario 4: IRS Proposes Transfer Pricing Adjustment
+Response:   • Challenge based on contemporaneous documentation support
+            • Request competent authority review if applicable (Bilateral APAs)
+            • Consider Advance Pricing Agreement (APA) to obtain IRS pre-clearance
+              for future years
+            • Engage transfer pricing counsel for amended returns if adjustment
+              is upheld
+
+ADVANCE PRICING AGREEMENT (APA) OPTION:
+
+The Company may consider pursuing an IRS Advance Pricing Agreement (APA) to 
+obtain pre-clearance of the transfer pricing methodology. This would provide
+certainty and reduce audit risk. Documentation package prepared here would 
+support an APA filing.
+
+================================================================================
+ACQUISITION DUE DILIGENCE CONSIDERATIONS
+================================================================================
+
+BUYER CONFIDENCE FACTORS:
+
+This documentation package demonstrates to acquisition buyers that:
+
+✓ Transfer Pricing is Defensible
+  • Well-documented policy supported by benchmarking
+  • Contemporaneous documentation contemporaneously prepared
+  • Cost allocation methodology is objective and auditable
+  • Reduces risk of IRS challenge post-acquisition
+
+✓ Financial Statements Are Reliable
+  • Intercompany pricing reflects arm's length terms
+  • Transfer prices comply with IRC §482
+  • No hidden liabilities from improper transfer pricing
+
+✓ Management is Sophisticated
+  • Demonstrates commitment to tax compliance
+  • Shows understanding of regulatory requirements
+  • Reduces acquirer's concerns about unknown tax liabilities
+
+✓ Integration Risks Are Minimized
+  • Centralized services model is proven and documented
+  • Cost allocation methodology is transparent
+  • Transfer pricing methodology supports post-acquisition integration
+
+BUYER DUE DILIGENCE REQUESTS ADDRESSED:
+
+Request 1: "Show us that intercompany pricing is arm's length"
+Response: Provide Transfer Pricing Policy Document + Benchmarking Analysis
+
+Request 2: "Are there any IRS transfer pricing issues?"
+Response: Provide contemporaneous documentation showing full compliance
+
+Request 3: "What is the cost of corporate overhead allocated to clinics?"
+Response: Provide Cost Allocation Manual + Sample monthly invoices
+
+Request 4: "How is this comparable to other healthcare providers?"
+Response: Provide benchmarking study with comparable company data
+
+Request 5: "Show me that this was properly approved and documented"
+Response: Provide Board minutes + Email chain + Management memos + Certification
+
+================================================================================
+ENGAGEMENT SUMMARY - EXTERNAL CONSULTANT SERVICES
+================================================================================
+
+Consultant:                      Healthcare Transfer Pricing Specialist
+Engagement Period:               November 2023 - January 2024
+Project Scope:                   Transfer pricing study, benchmarking, policy
+                                documentation, contemporaneous documentation
+Key Deliverables:                ✓ Transfer Pricing Study Report
+                                ✓ Benchmarking Analysis
+                                ✓ Transfer Pricing Policy Document review
+                                ✓ Cost Allocation Manual
+                                ✓ Board presentation
+                                ✓ Contemporaneous documentation support
+
+Professional Standards:          • IRS Publication 556
+                                • Treasury Regulation Section 1.482-7
+                                • Revenue Procedure 98-34
+                                • OECD Transfer Pricing Guidelines
+                                • IRS APA Program standards
+
+Certifications:                  All work performed by credentialed transfer
+                                pricing professionals with healthcare industry
+                                experience
+
+================================================================================
+NEXT STEPS & ONGOING COMPLIANCE
+================================================================================
+
+IMMEDIATE ACTIONS (Completed):
+
+✓ Transfer Pricing Policy approved by Transfer Pricing Committee (1/15/24)
+✓ Master Intercompany Services Agreement executed (1/30/24)
+✓ Cost allocation system implemented and invoicing commenced (2/5/24)
+✓ Chief Financial Officer Certification signed (1/31/24)
+✓ Documentation package filed and retained (1/31/24)
+
+QUARTERLY ACTIVITIES (Going Forward):
+
+• Q1: Year-end true-up reconciliation and adjustment invoicing
+• Q2: Review actual costs vs. budgeted costs; document any material changes
+• Q3: Mid-year benchmarking update; confirm allocation methodology appropriateness
+• Q4: Prepare for next year's documentation and policy review
+
+ANNUAL ACTIVITIES (Calendar Year-End):
+
+• Comprehensive year-end reconciliation and true-up
+• Update benchmarking study (conduct annually or every 2-3 years with external consultant)
+• Review changes in business model or service scope
+• Document any changes to allocation methodology
+• Transfer Pricing Committee review and approval
+• Chief Financial Officer Certification and sign-off
+• Tax return filing with contemporaneous documentation attachment
+
+ONGOING MONITORING:
+
+• Maintain detailed cost accounting records
+• Track cost allocation drivers monthly (claims, patients, users, headcount, etc.)
+• Monitor changes in comparable company landscape
+• Monitor regulatory guidance and IRS positions on transfer pricing
+• Maintain relationship with transfer pricing consultant for questions/guidance
+
+================================================================================
+DOCUMENT CHECKLIST FOR IRS EXAMINATION
+================================================================================
+
+If the IRS requests transfer pricing documentation, the following items should
+be provided in this order:
+
+□ Master Intercompany Services Agreement
+□ Transfer Pricing Policy Document
+□ Cost Allocation Manual
+□ Benchmarking Study Report
+□ Board Meeting Minutes (Transfer Pricing Committee)
+□ Transfer Pricing Study Engagement Memorandum
+□ Management Memorandum - Methodology Rationale
+□ Sample Monthly Cost Allocation Invoices
+□ General Ledger Support for Cost Pools
+□ Cost Allocation Reconciliation (Actual to Invoiced)
+□ Annual True-Up Reconciliation
+□ Chief Financial Officer Certification Letter
+□ Email chains demonstrating approval process
+□ Tax Return Contemporaneous Documentation Attachment
+□ Any amendments or updates to the policy
+
+================================================================================
+SUMMARY
+================================================================================
+
+This comprehensive Transfer Pricing & Intercompany Documentation Package provides
+Maple Point Health Holdings, Inc. with:
+
+✓ COMPLIANCE: Full documentation of arm's length transfer pricing satisfying
+  IRS requirements under IRC §482, Treasury Regulations, and Rev. Proc. 98-34
+
+✓ DEFENSIBILITY: Benchmarking support, functional analysis, and contemporaneous
+  documentation prepared to defend against IRS challenges
+
+✓ ACQUISITION READINESS: Documentation package demonstrates tax compliance to
+  acquisition buyers and reduces post-acquisition transfer pricing risk
+
+✓ OPERATIONAL CLARITY: Clear cost allocation methodology, monthly invoicing
+  process, and annual reconciliation process
+
+✓ ONGOING COMPLIANCE: Framework for annual updates, policy monitoring, and
+  regulatory compliance going forward
+
+The Company is now positioned to:
+• File tax returns with confidence in transfer pricing methodology
+• Defend methodology in IRS examination
+• Support acquisition due diligence
+• Maintain compliance in ongoing operations
+
+================================================================================
+END OF DOCUMENT
+================================================================================
