@@ -159,10 +159,16 @@ def remove_hyperlinks_pptx(prs):
                             removed_count += 1
 
             # Remove hyperlinks from shape click actions
-            if hasattr(shape, 'click_action') and hasattr(shape.click_action, 'hyperlink'):
-                if shape.click_action.hyperlink and hasattr(shape.click_action.hyperlink, 'address'):
-                    if shape.click_action.hyperlink.address:
-                        shape.click_action.hyperlink.address = None
-                        removed_count += 1
+            # Skip grouped shapes (type 6) - they don't support click_action
+            if shape.shape_type != 6:  # MSO_SHAPE_TYPE.GROUP
+                try:
+                    if hasattr(shape, 'click_action') and hasattr(shape.click_action, 'hyperlink'):
+                        if shape.click_action.hyperlink and hasattr(shape.click_action.hyperlink, 'address'):
+                            if shape.click_action.hyperlink.address:
+                                shape.click_action.hyperlink.address = None
+                                removed_count += 1
+                except AttributeError:
+                    # Some shapes don't support click_action - skip them
+                    pass
 
     return removed_count
