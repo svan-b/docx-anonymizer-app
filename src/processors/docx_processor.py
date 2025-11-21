@@ -501,15 +501,18 @@ def anonymize_text(text, alias_map, sorted_keys, compiled_patterns=None, track_d
 
         # Preserve case pattern
         if matched_text.isupper():
+            # ALL CAPS: "JIM HOPE" → "BEN LANGFORD"
             replacements += 1
             return replacement.upper()
         elif matched_text.islower():
+            # all lowercase: "jim hope" → "ben langford"
             replacements += 1
             return replacement.lower()
-        elif matched_text[0].isupper():
-            replacements += 1
-            return replacement.capitalize()
         else:
+            # Title Case or Mixed Case: "Jim Hope" → "Ben Langford" (preserve tracker capitalization)
+            # BUG FIX: Don't use .capitalize() - it lowercases all chars after first!
+            # "Ben Langford".capitalize() = "Ben langford" ❌
+            # Instead, return replacement as-is from tracker (already properly capitalized)
             replacements += 1
             return replacement
 
@@ -562,15 +565,16 @@ def anonymize_text_legacy(text, alias_map, sorted_keys, compiled_patterns):
 
             # Preserve case pattern
             if matched_text.isupper():
+                # ALL CAPS: "JIM HOPE" → "BEN LANGFORD"
                 replacements += 1
                 return replacement.upper()
             elif matched_text.islower():
+                # all lowercase: "jim hope" → "ben langford"
                 replacements += 1
                 return replacement.lower()
-            elif matched_text[0].isupper():
-                replacements += 1
-                return replacement.capitalize()
             else:
+                # Title Case or Mixed Case: "Jim Hope" → "Ben Langford" (preserve tracker capitalization)
+                # BUG FIX: Don't use .capitalize() - it lowercases all chars after first!
                 replacements += 1
                 return replacement
 

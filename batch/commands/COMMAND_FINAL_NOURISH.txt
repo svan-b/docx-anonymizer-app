@@ -1,0 +1,1 @@
+python3 batch_anonymize.py --input "input/Project Nourish" --output "output" --tracker "tracker/Anon Tracker - Nourish.xlsx" --auto-no-images --remove-hyperlinks --timestamp-output --remove-images-from-folders "Financial Information\Financials\Annual,Financial Information\Financials\8Ks,Financial Information\Financials\Quarterly"
