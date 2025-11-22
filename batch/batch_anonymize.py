@@ -171,14 +171,36 @@ class BatchStats:
         """Get formatted summary string"""
         success_rate = (self.files_succeeded / max(self.files_processed, 1)) * 100
 
-        # Calculate data integrity verification
+        # Calculate data integrity verification (enhanced)
         total_output = self.files_succeeded + self.copied_files_count
         expected_processable = self.input_files_discovered - self.tracker_files_excluded
         expected_output = expected_processable + self.copied_files_count
-        data_integrity_ok = (total_output == expected_output and self.files_failed == 0)
+
+        # Check for silent failures (succeeded with 0 replacements AND 0 images removed)
+        # This could indicate processor caught exception and returned (0,0,0)
+        suspicious_files = [
+            f for f in self.file_details
+            if f['status'] == 'success' and f['replacements'] == 0 and f['images_removed'] == 0
+            and f['extension'] in ['.docx', '.pptx', '.xlsx']  # Only check processable types
+        ]
+
+        # Primary integrity check: file counts match
+        counts_match = (total_output == expected_output and self.files_failed == 0)
+
+        # Enhanced check: no suspicious files
+        no_suspicious = len(suspicious_files) == 0
+
+        # Overall integrity status
+        data_integrity_ok = counts_match and no_suspicious
 
         integrity_icon = f"{Colors.GREEN}✓{Colors.ENDC}" if data_integrity_ok else f"{Colors.RED}✗{Colors.ENDC}"
-        integrity_status = "VERIFIED" if data_integrity_ok else "MISMATCH!"
+
+        if data_integrity_ok:
+            integrity_status = "VERIFIED"
+        elif not counts_match:
+            integrity_status = "MISMATCH!"
+        else:
+            integrity_status = f"WARNING ({len(suspicious_files)} suspicious files)"
 
         # Build PDF conversion section conditionally
         pdf_section = ""
@@ -696,6 +718,35 @@ def process_file(file_path: Path, input_dir: Path, output_dir: Path, pdf_output_
                 'images_removed': 0,
                 'error': f"Unsupported file type: {extension}",
                 'processing_time': time.time() - start_time
+            }
+
+        # CRITICAL: Verify output file was actually created (prevents silent failures)
+        # This catches cases where processor caught exception and returned (0,0,0)
+        if not output_path.exists():
+            error_msg = f"Output file not created - processing failed silently"
+            logger.error(f"INTEGRITY ERROR: {relative_path} - {error_msg}")
+            return {
+                'status': 'failed',
+                'replacements': 0,
+                'images_removed': 0,
+                'hyperlinks_removed': 0,
+                'error': error_msg,
+                'processing_time': time.time() - start_time,
+                'replacement_details': {}
+            }
+
+        # Check for 0-byte files (indicates incomplete processing)
+        if output_path.stat().st_size == 0:
+            error_msg = f"Output file is empty (0 bytes) - processing incomplete"
+            logger.error(f"INTEGRITY ERROR: {relative_path} - {error_msg}")
+            return {
+                'status': 'failed',
+                'replacements': 0,
+                'images_removed': 0,
+                'hyperlinks_removed': 0,
+                'error': error_msg,
+                'processing_time': time.time() - start_time,
+                'replacement_details': {}
             }
 
         # PDF conversion (optional)

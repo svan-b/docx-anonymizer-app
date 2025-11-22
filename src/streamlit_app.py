@@ -711,6 +711,14 @@ if execute_btn:
                 else:
                     raise ValueError(f"Unsupported file type: {file_type}")
 
+                # CRITICAL: Verify output file was actually created (prevents silent failures)
+                if not Path(original_output_path).exists():
+                    raise FileNotFoundError(f"Output file not created - processing failed silently")
+
+                # Check for 0-byte files (indicates incomplete processing)
+                if Path(original_output_path).stat().st_size == 0:
+                    raise ValueError(f"Output file is empty (0 bytes) - processing incomplete")
+
                 total_replacements += replacements
                 total_images += images
                 total_hyperlinks += hyperlinks
